@@ -62,9 +62,9 @@ if text:
 
     # Load vocabulary file
     try:
-            with open('vocab.txt', 'r') as file:
-                # Read the contents of the file into a variable
-                vocab_text = file.read()
+        with open('vocab.txt', 'r') as file:
+            # Read the contents of the file into a variable
+            vocab_text = file.read()
     except FileNotFoundError:
         with open('vocab.txt', 'w') as file:
             # Create empty file
