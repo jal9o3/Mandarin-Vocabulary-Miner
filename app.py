@@ -49,32 +49,44 @@ if chapter:
     df['%'] = pd.Series(word_percentages)
     df['Pinyin'] = pd.Series(word_pinyin)
 
+    # Load vocabulary file
+    try:
+            with open('vocab.txt', 'r') as file:
+                # Read the contents of the file into a variable
+                vocab_text = file.read()
+    except FileNotFoundError:
+        with open('vocab.txt', 'w') as file:
+            # Create empty file
+            pass
+    finally:
+        with open('vocab.txt', 'r') as file:
+            # Read the contents of the file into a variable
+            vocab_text = file.read()
+    
     edit_vocab = st.checkbox("Vocabulary Edit Mode")
-
     if edit_vocab:
-        try:
-            with open('vocab.txt', 'r') as file:
-                # Read the contents of the file into a variable
-                vocab_text = file.read()
-        except FileNotFoundError:
-            with open('vocab.txt', 'w') as file:
-                # Create empty file
-                pass
-        finally:
-            with open('vocab.txt', 'r') as file:
-                # Read the contents of the file into a variable
-                vocab_text = file.read()
         # Load the vocab into a text area for editing
         vocab_text = st.text_area('Enter known words (separated by spaces):', value=vocab_text, height=200)
         if vocab_text:
             with open('vocab.txt', 'w') as file:
                 # Write the vocabulary to the file
-                print("Got here")
                 file.write(vocab_text)
     
     show_pinyin = st.checkbox("Show Pinyin")
+    show_known = st.checkbox ("Show Known Words")
+
+
+    vocab_list = vocab_text.split(" ")
+    # Create a filtered dataframe excluding known words
+    filtered_df = df[~df['Word'].isin(vocab_list)]
+
+    if show_known:
+        display_df = df
+    else:
+        display_df = filtered_df
+
     # Display the DataFrame as an interactive table
     if show_pinyin:
-        st.dataframe(df, width=600)
+        st.dataframe(display_df, width=1000)
     else:
-        st.dataframe(df, column_order=['Word', '%', 'Occurences'], width=600)
+        st.dataframe(display_df, column_order=['Word', '%', 'Occurences'], width=600)
