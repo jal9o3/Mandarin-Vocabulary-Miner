@@ -8,7 +8,18 @@ from pypinyin import pinyin, lazy_pinyin, Style
 
 from collections import Counter
 
-zh_punctuation = string.punctuation + '，。！？；：“”‘’（）【】《》   \n · 、'
+# Set page configuration
+st.set_page_config(page_title="Mandarin Vocabulary Miner")
+
+# Hide the deploy button using custom CSS
+hide_deploy_button = """
+    <style>
+    .stDeployButton {display: none;}
+    </style>
+"""
+st.markdown(hide_deploy_button, unsafe_allow_html=True)
+
+zh_punctuation = string.punctuation + '，。！？；：“”‘’（）【】《》   \n · 、 …'
 
 def remove_punctuation(text):
     return text.translate(str.maketrans('', '', zh_punctuation))
@@ -83,7 +94,7 @@ if text:
         if word in vocab_list:
             known += count/total_occurences*100
     
-    st.write(f"You can understand {known:.2f}% of this text.")
+    st.write(f"You can understand about {known:.1f}% of this text.")
 
 
     # Create a filtered dataframe excluding known words
