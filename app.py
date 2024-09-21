@@ -50,7 +50,7 @@ if text:
     word_pinyin = [pinyin(word, style=Style.TONE3) for word in word_ranking]
 
 
-    # Create a sample DataFrame
+    # Create a DataFrame
     df = pd.DataFrame(
         columns=("Word", "Pinyin", "%", "Occurences"),
     )
