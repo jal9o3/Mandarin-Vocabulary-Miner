@@ -4,11 +4,11 @@ import streamlit as st
 import pandas as pd
 
 import jieba
-from pypinyin import lazy_pinyin, Style
+from pypinyin import pinyin, lazy_pinyin, Style
 
 from collections import Counter
 
-zh_punctuation = string.punctuation + '，。！？；：“”‘’（）【】《》   \n'
+zh_punctuation = string.punctuation + '，。！？；：“”‘’（）【】《》   \n ·'
 
 def remove_punctuation(text):
     return text.translate(str.maketrans('', '', zh_punctuation))
@@ -37,11 +37,10 @@ if chapter:
     
     # Calculate total percentage
     total_frequency = sum(word_count)
-    print(f'Total Frequency: {total_frequency}')
     word_percentages = [count/total_frequency*100 for count in word_count]
 
     # Get the pinyin
-    word_pinyin = [lazy_pinyin(word, style=Style.TONE3)[0] for word in word_ranking]
+    word_pinyin = [pinyin(word, style=Style.TONE3) for word in word_ranking]
 
 
     # Create a sample DataFrame
@@ -54,5 +53,10 @@ if chapter:
     df['%'] = pd.Series(word_percentages)
     df['Pinyin'] = pd.Series(word_pinyin)
 
+    show_pinyin = st.checkbox("Show Pinyin")
+
     # Display the DataFrame as an interactive table
-    st.dataframe(df, width=550)
+    if show_pinyin:
+        st.dataframe(df, width=600)
+    else:
+        st.dataframe(df, column_order=['Word', '%', 'Occurences'], width=600)
