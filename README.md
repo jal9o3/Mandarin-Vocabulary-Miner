@@ -12,7 +12,7 @@ Mandarin Vocabulary Miner is a tool designed to help learners of Mandarin Chines
 
 1. Clone the repository:
     ```bash
-    git clone https://github.com/jal9o3/mandarin-vocabulary-miner.git
+    git clone https://github.com/jal9o3/Mandarin-Vocabulary-Miner.git
     cd mandarin-vocabulary-miner
     ```
 
