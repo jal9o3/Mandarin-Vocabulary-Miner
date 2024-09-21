@@ -4,7 +4,7 @@ import streamlit as st
 import pandas as pd
 
 import jieba
-from pypinyin import pinyin, lazy_pinyin, Style
+from pypinyin import pinyin, Style
 
 from collections import Counter
 
