@@ -8,19 +8,19 @@ from pypinyin import pinyin, lazy_pinyin, Style
 
 from collections import Counter
 
-zh_punctuation = string.punctuation + '，。！？；：“”‘’（）【】《》   \n ·'
+zh_punctuation = string.punctuation + '，。！？；：“”‘’（）【】《》   \n · 、'
 
 def remove_punctuation(text):
     return text.translate(str.maketrans('', '', zh_punctuation))
 
-st.title("Mandarin Chapter Reader")
+st.title("Mandarin Vocabulary Miner")
 
-chapter = st.text_area('Enter content here:', height=300)
-chapter = remove_punctuation(chapter)
+text = st.text_area('Enter text here:', height=300)
+text = remove_punctuation(text)
 
-if chapter:
+if text:
     # Parse text
-    words = jieba.cut(chapter)
+    words = jieba.cut(text)
     # convert to normal python list
     word_list = list(words)
 
@@ -32,8 +32,8 @@ if chapter:
     word_count = [count for items, count in word_counter.most_common()]
     
     # Calculate total percentage
-    total_frequency = sum(word_count)
-    word_percentages = [count/total_frequency*100 for count in word_count]
+    total_occurences = sum(word_count)
+    word_percentages = [count/total_occurences*100 for count in word_count]
 
     # Get the pinyin
     word_pinyin = [pinyin(word, style=Style.TONE3) for word in word_ranking]
@@ -75,8 +75,17 @@ if chapter:
     show_pinyin = st.checkbox("Show Pinyin")
     show_known = st.checkbox ("Show Known Words")
 
-
     vocab_list = vocab_text.split(" ")
+
+    known = 0
+    # Calculate the percentage of known words
+    for word, count in word_counter.most_common():
+        if word in vocab_list:
+            known += count/total_occurences*100
+    
+    st.write(f"You can understand {known:.2f}% of this text.")
+
+
     # Create a filtered dataframe excluding known words
     filtered_df = df[~df['Word'].isin(vocab_list)]
 
@@ -89,4 +98,4 @@ if chapter:
     if show_pinyin:
         st.dataframe(display_df, width=1000)
     else:
-        st.dataframe(display_df, column_order=['Word', '%', 'Occurences'], width=600)
+        st.dataframe(display_df, column_order=['Word', '%', 'Occurences'], width=1000)
