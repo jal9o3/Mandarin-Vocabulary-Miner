@@ -33,6 +33,7 @@ cleaned_text = remove_punctuation(text)
 show_hoverable = st.checkbox("Write hoverable text")
 
 if show_hoverable:
+    st.write("You can use a pop-up dictionary on this:")
     st.write(text)
 
 if cleaned_text:
@@ -116,3 +117,17 @@ if cleaned_text:
         st.dataframe(display_df, width=1000)
     else:
         st.dataframe(display_df, column_order=['Word', '%', 'Occurences'], width=1000)
+
+    # Writes the unknown words (for use with hover dictionaries)
+    hoverable_vocab = st.checkbox("Write hoverable words")
+    if hoverable_vocab:
+        st.write("You can use a pop-up dictionary on these words:")
+        words = ""
+        for i, word in enumerate(display_df['Word']):
+            words += f"#{i + 1} --> {word}, "
+            # Add a newline every three words
+            if (i + 1) % 8 == 0:
+                words += "\n"
+                st.write(words)
+                words = ""
+
