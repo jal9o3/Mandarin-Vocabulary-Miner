@@ -27,11 +27,17 @@ def remove_punctuation(text):
 st.title("Mandarin Vocabulary Miner")
 
 text = st.text_area('Enter text here:', height=300)
-text = remove_punctuation(text)
+cleaned_text = remove_punctuation(text)
 
-if text:
+# Write the text to the page (for hover dictionaries)
+show_hoverable = st.checkbox("Write hoverable text")
+
+if show_hoverable:
+    st.write(text)
+
+if cleaned_text:
     # Parse text
-    words = jieba.cut(text)
+    words = jieba.cut(cleaned_text)
     # convert to normal python list
     word_list = list(words)
 
@@ -94,7 +100,7 @@ if text:
         if word in vocab_list:
             known += count/total_occurences*100
     
-    st.write(f"You can understand about {known:.1f}% of this text.")
+    st.write(f"You know about {known:.1f}% of the words in this text.")
 
 
     # Create a filtered dataframe excluding known words
