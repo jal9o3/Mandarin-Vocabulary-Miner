@@ -124,10 +124,16 @@ if cleaned_text:
         st.write("You can use a pop-up dictionary on these words:")
         words = ""
         for i, word in enumerate(display_df['Word']):
-            words += f"#{i + 1} --> {word}, "
+            words += f"#{i + 1} --> {word}"
+            # Add a comma after every word except the last one
+            if i != ((len(display_df['Word']) - 1)):
+                words += ", "
             # Add a newline every three words
             if (i + 1) % 8 == 0:
                 words += "\n"
                 st.write(words)
                 words = ""
+            # Write the leftover words
+            if i == (len(display_df['Word']) - 1):
+                st.write(words)
 
