@@ -26,14 +26,14 @@ def remove_punctuation(text):
 
 st.title("Mandarin Vocabulary Miner")
 
-text = st.text_area('Enter text here:', height=300)
+text = st.text_area('Enter Mandarin text here:', height=300)
 cleaned_text = remove_punctuation(text)
 
 # Write the text to the page (for hover dictionaries)
 show_hoverable = st.checkbox("Write hoverable text")
 
 if show_hoverable:
-    st.write("You can use a pop-up dictionary on this:")
+    st.write("You can use a pop-up dictionary of your choice on this text:")
     st.write(text)
 
 if cleaned_text:
@@ -84,7 +84,7 @@ if cleaned_text:
     edit_vocab = st.checkbox("Vocabulary Edit Mode")
     if edit_vocab:
         # Load the vocab into a text area for editing
-        vocab_text = st.text_area('Enter known words (separated by spaces):', value=vocab_text, height=200)
+        vocab_text = st.text_area('Enter the Mandarin words you can read (separated by spaces):', value=vocab_text, height=200)
         if vocab_text:
             with open('vocab.txt', 'w') as file:
                 # Write the vocabulary to the file
@@ -101,7 +101,7 @@ if cleaned_text:
         if word in vocab_list:
             known += count/total_occurences*100
     
-    st.write(f"You know about {known:.1f}% of the words in this text.")
+    st.write(f"Text Analysis Result: You can read {known:.1f}% of the words in this text.")
 
 
     # Create a filtered dataframe excluding known words
@@ -121,7 +121,7 @@ if cleaned_text:
     # Writes the unknown words (for use with hover dictionaries)
     hoverable_vocab = st.checkbox("Write hoverable words")
     if hoverable_vocab:
-        st.write("You can use a pop-up dictionary on these words:")
+        st.write("You can use a pop-up dictionary of your choice on these words:")
         words = ""
         for i, word in enumerate(display_df['Word']):
             words += f"#{i + 1} --> {word}"
