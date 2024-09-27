@@ -36,6 +36,17 @@ if show_hoverable:
     st.write("You can use a pop-up dictionary of your choice on this text:")
     st.write(text)
 
+pinyin_reading = st.checkbox("Write pinyin reading")
+
+if pinyin_reading:
+    raw_words = jieba.cut(text)
+    raw_text = ''
+    for raw_word in raw_words:
+        # Syllables are a list which are joined as a string
+        raw_text += "".join(syllable[0] for syllable in pinyin(raw_word, style=Style.TONE3)) + " "
+    
+    st.write(raw_text)
+
 if cleaned_text:
     # Parse text
     words = jieba.cut(cleaned_text)
@@ -84,7 +95,9 @@ if cleaned_text:
     edit_vocab = st.checkbox("Vocabulary Edit Mode")
     if edit_vocab:
         # Load the vocab into a text area for editing
-        vocab_text = st.text_area('Enter the Mandarin words you can read (separated by spaces):', value=vocab_text, height=200)
+        vocab_text = st.text_area(
+            'Enter the Mandarin words you can read (separated by spaces):', 
+            value=vocab_text, height=200)
         if vocab_text:
             with open('vocab.txt', 'w') as file:
                 # Write the vocabulary to the file
