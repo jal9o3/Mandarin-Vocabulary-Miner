@@ -1,4 +1,4 @@
-import string
+import string, re
 
 import streamlit as st
 import pandas as pd
@@ -24,6 +24,10 @@ zh_punctuation = string.punctuation + '，。！？；：“”‘’（）【�
 
 def remove_punctuation(text):
     return text.translate(str.maketrans('', '', zh_punctuation))
+
+def is_pinyin_toned(string):
+    pattern = r'^[a-zA-Z]+[1234]$'
+    return bool(re.match(pattern, string))
 
 st.title("Mandarin Vocabulary Miner")
 
@@ -53,10 +57,16 @@ if zhuyin_reading:
     raw_words = jieba.cut(text)
     raw_zhuyin_text = ''
     for raw_word in raw_words:
+        # Create a list of syllable strings
         syllables = [syllable[0] for syllable in pinyin(raw_word, style=Style.TONE3)]
         for syllable in syllables:
             try:
-                raw_zhuyin_text += pinyin_to_zhuyin(syllable)
+                # Add 5 if neutral tone
+                if pinyin_to_zhuyin(syllable) and not is_pinyin_toned(syllable):
+                    syllable += "5"
+                    raw_zhuyin_text += pinyin_to_zhuyin(syllable)
+                else:
+                    raw_zhuyin_text += pinyin_to_zhuyin(syllable)
             except ValueError:
                 raw_zhuyin_text += syllable
         raw_zhuyin_text += " "
