@@ -93,6 +93,18 @@ if cleaned_text:
     # Get the pinyin
     word_pinyin = [pinyin(word, style=Style.TONE3) for word in word_ranking]
 
+    # Get the zhuyin
+    word_zhuyin = []
+    for word in word_ranking:
+        zhuyin_word = ''
+        syllables = [syllable[0] for syllable in pinyin(word, style=Style.TONE3)]
+        for syllable in syllables:
+            if pinyin_to_zhuyin(syllable) and not is_pinyin_toned(syllable):
+                    syllable += "5"
+                    zhuyin_word += pinyin_to_zhuyin(syllable)
+            else:
+                zhuyin_word += pinyin_to_zhuyin(syllable)
+        word_zhuyin.append(zhuyin_word)
 
     # Create a DataFrame
     df = pd.DataFrame(
@@ -103,6 +115,7 @@ if cleaned_text:
     df['Occurences'] = pd.Series(word_count)
     df['%'] = pd.Series(word_percentages)
     df['Pinyin'] = pd.Series(word_pinyin)
+    df['Zhuyin'] = pd.Series(word_zhuyin)
 
     # Load vocabulary file
     try:
@@ -130,6 +143,7 @@ if cleaned_text:
                 file.write(vocab_text)
     
     show_pinyin = st.checkbox("Show Pinyin")
+    show_zhuyin = st.checkbox("Show Zhuyin")
     show_known = st.checkbox ("Show Known Words")
 
     vocab_list = vocab_text.split(" ")
@@ -151,11 +165,21 @@ if cleaned_text:
     else:
         display_df = filtered_df
 
-    # Display the DataFrame as an interactive table
+    display_columns = ['Word', '%', 'Occurences']
     if show_pinyin:
-        st.dataframe(display_df, width=1000)
+        display_columns.append('Pinyin')
     else:
-        st.dataframe(display_df, column_order=['Word', '%', 'Occurences'], width=1000)
+        if 'Pinyin' in display_columns:
+            display_columns.remove('Pinyin')
+    
+    if show_zhuyin:
+        display_columns.append('Zhuyin')
+    else:
+        if 'Zhuyin' in display_columns:
+            display_columns.remove('Zhuyin')
+
+    # Display the DataFrame as an interactive table
+    st.dataframe(display_df, column_order=display_columns, width=1000)
 
     # Writes the unknown words (for use with hover dictionaries)
     hoverable_vocab = st.checkbox("Write hoverable words")
