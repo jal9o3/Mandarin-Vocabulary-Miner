@@ -5,6 +5,7 @@ import pandas as pd
 
 import jieba
 from pypinyin import pinyin, Style
+from pyzhuyin import pinyin_to_zhuyin
 
 from collections import Counter
 
@@ -36,16 +37,31 @@ if show_hoverable:
     st.write("You can use a pop-up dictionary of your choice on this text:")
     st.write(text)
 
-pinyin_reading = st.checkbox("Write pinyin reading")
 
+pinyin_reading = st.checkbox("Write pinyin reading")
 if pinyin_reading:
     raw_words = jieba.cut(text)
-    raw_text = ''
+    raw_pinyin_text = ''
     for raw_word in raw_words:
         # Syllables are a list which are joined as a string
-        raw_text += "".join(syllable[0] for syllable in pinyin(raw_word, style=Style.TONE3)) + " "
+        raw_pinyin_text += "".join(syllable[0] for syllable in pinyin(raw_word, style=Style.TONE3)) + " "
     
-    st.write(raw_text)
+    st.write(raw_pinyin_text)
+
+zhuyin_reading = st.checkbox("Write zhuyin reading")
+if zhuyin_reading:
+    raw_words = jieba.cut(text)
+    raw_zhuyin_text = ''
+    for raw_word in raw_words:
+        syllables = [syllable[0] for syllable in pinyin(raw_word, style=Style.TONE3)]
+        for syllable in syllables:
+            try:
+                raw_zhuyin_text += pinyin_to_zhuyin(syllable)
+            except ValueError:
+                raw_zhuyin_text += syllable
+        raw_zhuyin_text += " "
+    
+    st.write(raw_zhuyin_text)
 
 if cleaned_text:
     # Parse text
