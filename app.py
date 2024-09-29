@@ -99,11 +99,14 @@ if cleaned_text:
         zhuyin_word = ''
         syllables = [syllable[0] for syllable in pinyin(word, style=Style.TONE3)]
         for syllable in syllables:
-            if pinyin_to_zhuyin(syllable) and not is_pinyin_toned(syllable):
-                    syllable += "5"
+            try:
+                if pinyin_to_zhuyin(syllable) and not is_pinyin_toned(syllable):
+                        syllable += "5"
+                        zhuyin_word += pinyin_to_zhuyin(syllable)
+                else:
                     zhuyin_word += pinyin_to_zhuyin(syllable)
-            else:
-                zhuyin_word += pinyin_to_zhuyin(syllable)
+            except ValueError:
+                zhuyin_word += syllable
         word_zhuyin.append(zhuyin_word)
 
     # Create a DataFrame
