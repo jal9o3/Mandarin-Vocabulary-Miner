@@ -6,6 +6,7 @@ import pandas as pd
 import jieba
 from pypinyin import pinyin, Style
 from pyzhuyin import pinyin_to_zhuyin
+from deep_translator import GoogleTranslator
 
 from collections import Counter
 
@@ -28,6 +29,17 @@ def remove_punctuation(text):
 def is_pinyin_toned(string):
     pattern = r'^[a-zA-Z]+[1234]$'
     return bool(re.match(pattern, string))
+
+@st.cache_data
+def translate_words(word_ranking):
+    translation_bar = st.progress(0, text=f"Translating Word 0 of {len(word_ranking)}")
+    word_translations = []
+    for i, word in enumerate(word_ranking):
+        translation_bar.progress(i/len(word_ranking), text=f"Translating Word {i} of {len(word_ranking)}")
+        translated = GoogleTranslator(source='zh-CN', target='en').translate(word)
+        word_translations.append(translated)
+    translation_bar.progress(100, text=f"Translated {len(word_ranking)} words.")
+    return word_translations
 
 st.title("Mandarin Vocabulary Miner")
 
@@ -109,16 +121,12 @@ if cleaned_text:
                 zhuyin_word += syllable
         word_zhuyin.append(zhuyin_word)
 
+    
+
     # Create a DataFrame
     df = pd.DataFrame(
         columns=("Word", "Pinyin", "%", "Occurences"),
     )
-
-    df['Word'] = pd.Series(word_ranking)
-    df['Occurences'] = pd.Series(word_count)
-    df['%'] = pd.Series(word_percentages)
-    df['Pinyin'] = pd.Series(word_pinyin)
-    df['Zhuyin'] = pd.Series(word_zhuyin)
 
     # Load vocabulary file
     try:
@@ -148,6 +156,7 @@ if cleaned_text:
     show_pinyin = st.checkbox("Show Pinyin")
     show_zhuyin = st.checkbox("Show Zhuyin")
     show_known = st.checkbox ("Show Known Words")
+    show_translations = st.checkbox("Show Machine Translations")
 
     vocab_list = vocab_text.split(" ")
 
@@ -158,15 +167,6 @@ if cleaned_text:
             known += count/total_occurences*100
     
     st.write(f"Text Analysis Result: You can read {known:.1f}% of the words in this text.")
-
-
-    # Create a filtered dataframe excluding known words
-    filtered_df = df[~df['Word'].isin(vocab_list)]
-
-    if show_known:
-        display_df = df
-    else:
-        display_df = filtered_df
 
     display_columns = ['Word', '%', 'Occurences']
     if show_pinyin:
@@ -180,6 +180,32 @@ if cleaned_text:
     else:
         if 'Zhuyin' in display_columns:
             display_columns.remove('Zhuyin')
+    
+    if show_translations:
+        # Get machine translations
+        word_translations = translate_words(word_ranking)
+        print(word_translations)
+        df['Translation'] = pd.Series(word_translations)
+        print(df['Translation'])
+        display_columns.append('Translation')
+        print(display_columns)
+    else:
+        if 'Translation' in display_columns:
+            display_columns.remove('Translation')
+
+    df['Word'] = pd.Series(word_ranking)
+    df['Occurences'] = pd.Series(word_count)
+    df['%'] = pd.Series(word_percentages)
+    df['Pinyin'] = pd.Series(word_pinyin)
+    df['Zhuyin'] = pd.Series(word_zhuyin)
+
+    # Create a filtered dataframe excluding known words
+    filtered_df = df[~df['Word'].isin(vocab_list)]
+
+    if show_known:
+        display_df = df
+    else:
+        display_df = filtered_df
 
     # Display the DataFrame as an interactive table
     st.dataframe(display_df, column_order=display_columns, width=1000)
