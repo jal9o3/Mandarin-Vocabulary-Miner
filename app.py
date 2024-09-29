@@ -53,7 +53,6 @@ if show_hoverable:
     st.write("You can use a pop-up dictionary of your choice on this text:")
     st.write(text)
 
-
 pinyin_reading = st.checkbox("Write pinyin reading")
 if pinyin_reading:
     raw_words = jieba.cut(text)
@@ -121,8 +120,6 @@ if cleaned_text:
                 zhuyin_word += syllable
         word_zhuyin.append(zhuyin_word)
 
-    
-
     # Create a DataFrame
     df = pd.DataFrame(
         columns=("Word", "Pinyin", "%", "Occurences"),
@@ -184,14 +181,11 @@ if cleaned_text:
     if show_translations:
         # Get machine translations
         word_translations = translate_words(word_ranking)
-        print(word_translations)
-        df['Translation'] = pd.Series(word_translations)
-        print(df['Translation'])
-        display_columns.append('Translation')
-        print(display_columns)
+        df['Machine Translation'] = pd.Series(word_translations)
+        display_columns.append('Machine Translation')
     else:
-        if 'Translation' in display_columns:
-            display_columns.remove('Translation')
+        if 'Machine Translation' in display_columns:
+            display_columns.remove('Machine Translation')
 
     df['Word'] = pd.Series(word_ranking)
     df['Occurences'] = pd.Series(word_count)
@@ -228,4 +222,3 @@ if cleaned_text:
             # Write the leftover words
             if i == (len(display_df['Word']) - 1):
                 st.write(words)
-
