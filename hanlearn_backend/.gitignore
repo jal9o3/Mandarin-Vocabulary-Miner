@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.env
+venv/
+env/
+.venv/
+pip-wheel-cache/
+.tox/
+.coverage
+/build/
+/dist/
+
+# Django specific
+*.log
+local_settings.py
+db.sqlite3
+/static_cdn/
+/media/
+migrations/  # Only add if you want to ignore all migration files (generally not recommended, only for specific scenarios)
+
+# IDE specific (VS Code, PyCharm, etc.)
+.vscode/
+.idea/
+
+# OS generated files
+.DS_Store
+.directory
+
+# Dependency management lock files (include if using pipenv/poetry, otherwise ignore)
+# Pipfile.lock
+# poetry.lock
