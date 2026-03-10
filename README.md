@@ -37,3 +37,40 @@ This project is licensed under the MIT License. See the [LICENSE](LICENSE) file 
 ## Contact
 
 For any questions or suggestions, please open an issue or contact me at jeromeardiente.loria@bicol-u.edu.ph
+
+## Django REST-style API (hanlearn_backend)
+
+The Streamlit analysis logic is now extracted into reusable backend services under `hanlearn_backend/miner_api/services.py` and exposed as JSON endpoints.
+
+Run the backend:
+
+```bash
+cd hanlearn_backend
+python manage.py runserver
+```
+
+Available endpoints:
+
+- `POST /api/analyze`
+    - JSON body: `{ "text": "...", "vocab_text": "optional words separated by spaces" }`
+    - `vocab_text` is optional; if omitted, backend uses `hanlearn_backend/vocab.txt`.
+
+- `POST /api/analyze-file`
+    - `multipart/form-data`
+    - file field: `file` (UTF-8 text file)
+    - optional field: `vocab_text`
+
+- `GET /api/vocab`
+    - Returns persisted vocabulary and tokenized word list.
+
+- `POST /api/vocab/update` or `PUT /api/vocab/update`
+    - JSON body can be either:
+        - `{ "vocab_text": "word1 word2 word3" }`
+        - `{ "words": ["word1", "word2", "word3"] }`
+
+Run backend API tests:
+
+```bash
+cd hanlearn_backend
+python manage.py test miner_api
+```
