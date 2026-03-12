@@ -107,6 +107,42 @@ class MinerApiTests(TestCase):
         data = response.json()
         self.assertGreater(data["known_percentage"], 0)
 
+    def test_vocab_screen_groups_words_into_hsk_bands(self):
+        response = self.client.post(
+            "/api/vocab-screen",
+            data=json.dumps({"text": "我喜欢你，你喜欢我"}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertIn("groups", data)
+        self.assertEqual(len(data["groups"]), 9)
+        self.assertGreater(data["total_unique_words"], 0)
+
+    def test_vocab_screen_rejects_non_string_text(self):
+        response = self.client.post(
+            "/api/vocab-screen",
+            data=json.dumps({"text": ["bad"]}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("error", response.json())
+
+    def test_vocab_screen_handles_empty_text(self):
+        response = self.client.post(
+            "/api/vocab-screen",
+            data=json.dumps({"text": ""}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["total_unique_words"], 0)
+        self.assertEqual(data["total_occurrences"], 0)
+        self.assertEqual(len(data["groups"]), 9)
+
     def test_analyze_file_success(self):
         upload = SimpleUploadedFile(
             "sample.txt",

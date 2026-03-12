@@ -55,6 +55,10 @@ Available endpoints:
     - JSON body: `{ "text": "...", "vocab_text": "optional words separated by spaces" }`
     - `vocab_text` is optional; if omitted, backend uses `hanlearn_backend/vocab.txt`.
 
+- `POST /api/vocab-screen`
+    - JSON body: `{ "text": "..." }`
+    - Returns unique words grouped into `HSK 1` to `HSK 9` buckets so users can select known vocabulary before analysis.
+
 - `POST /api/analyze-file`
     - `multipart/form-data`
     - file field: `file` (UTF-8 text file)

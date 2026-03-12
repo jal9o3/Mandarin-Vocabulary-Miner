@@ -5,7 +5,7 @@ from django.http import HttpRequest, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_http_methods
 
-from .services import analyze_text, load_vocab, parse_vocab_text, save_vocab
+from .services import analyze_text, build_vocab_screen, load_vocab, parse_vocab_text, save_vocab
 
 
 VOCAB_FILE = settings.BASE_DIR / "vocab.txt"
@@ -52,6 +52,19 @@ def update_vocab_view(request: HttpRequest) -> JsonResponse:
             "words": parse_vocab_text(vocab_text),
         }
     )
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def vocab_screen_view(request: HttpRequest) -> JsonResponse:
+    payload = _json_body(request)
+    text = payload.get("text", "")
+
+    if not isinstance(text, str):
+        return JsonResponse({"error": "Field 'text' must be a string."}, status=400)
+
+    screening = build_vocab_screen(text)
+    return JsonResponse(screening)
 
 
 @csrf_exempt
