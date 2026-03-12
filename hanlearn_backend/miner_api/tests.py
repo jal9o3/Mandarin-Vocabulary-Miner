@@ -3,8 +3,11 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
+from django.contrib.auth.models import User
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
+
+from miner_api.models import UserFlashcard
 
 
 class MinerApiTests(TestCase):
@@ -172,3 +175,41 @@ class MinerApiTests(TestCase):
 
         self.assertEqual(response.status_code, 400)
         self.assertIn("error", response.json())
+
+    def test_register_creates_account_and_logs_in(self):
+        response = self.client.post(
+            "/api/auth/register",
+            data=json.dumps({"username": "alice", "password": "StrongPass123"}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertTrue(User.objects.filter(username="alice").exists())
+
+    def test_create_flashcards_requires_authentication(self):
+        response = self.client.post(
+            "/api/flashcards/create",
+            data=json.dumps({"words": [{"word": "你好", "pinyin": "ni3 hao3"}]}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 401)
+        self.assertIn("error", response.json())
+
+    def test_create_flashcards_for_authenticated_user(self):
+        user = User.objects.create_user(username="bob", password="TopSecret123")
+        self.client.force_login(user)
+
+        response = self.client.post(
+            "/api/flashcards/create",
+            data=json.dumps({
+                "words": [
+                    {"word": "你好", "pinyin": "ni3 hao3"},
+                    {"word": "世界", "pinyin": "shi4 jie4"},
+                ]
+            }),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(UserFlashcard.objects.filter(user=user).count(), 2)

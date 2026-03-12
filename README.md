@@ -64,6 +64,25 @@ Available endpoints:
     - file field: `file` (UTF-8 text file)
     - optional field: `vocab_text`
 
+- `POST /api/auth/register`
+    - JSON body: `{ "username": "...", "password": "..." }`
+    - Creates an account and starts an authenticated session.
+
+- `POST /api/auth/login`
+    - JSON body: `{ "username": "...", "password": "..." }`
+    - Starts an authenticated session for an existing account.
+
+- `GET /api/auth/me`
+    - Returns current session authentication state.
+
+- `POST /api/auth/logout`
+    - Ends the authenticated session.
+
+- `POST /api/flashcards/create`
+    - JSON body: `{ "words": [{ "word": "你好", "pinyin": "ni3 hao3" }] }`
+    - Saves flashcards for the authenticated user.
+    - Guests are rejected; the user must create an account or sign in first.
+
 - `GET /api/vocab`
     - Returns persisted vocabulary and tokenized word list.
 
