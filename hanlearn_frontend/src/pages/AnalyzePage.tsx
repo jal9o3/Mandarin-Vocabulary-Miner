@@ -176,9 +176,9 @@ export function AnalyzePage() {
                 type="button"
                 onClick={handleConvertToFlashcards}
                 disabled={isConverting || !flashcardWords.length}
-                className="rounded-xl bg-[#d1451b] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#b63e19] disabled:cursor-not-allowed disabled:opacity-70"
+                className="ml-auto block rounded-xl bg-[#d1451b] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#b63e19] disabled:cursor-not-allowed disabled:opacity-70"
               >
-                {isConverting ? 'Converting...' : 'Convert to Flashcards'}
+                {isConverting ? 'Creating...' : 'Create Flashcards'}
               </button>
               {flashcardMessage ? <p className="mt-3 text-sm font-semibold text-[#8c2f11]">{flashcardMessage}</p> : null}
             </div>
@@ -192,22 +192,30 @@ export function AnalyzePage() {
           ) : null}
 
           <div className="mt-6 flex flex-wrap gap-3">
-            <Link
+            {/* <Link
               to="/paste"
               className="rounded-xl bg-[#d1451b] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#b63e19]"
             >
               Analyze New Text or File
-            </Link>
+            </Link> */}
           </div>
         </section>
       </main>
 
       {isAuthModalOpen ? (
         <div className="fixed inset-0 z-40 grid place-items-center bg-[#1b1714]/45 px-4">
-          <div className="w-full max-w-md rounded-2xl border border-[#d8ccbd] bg-white p-6 shadow-2xl">
+          <div className="relative w-full max-w-md rounded-2xl border border-[#d8ccbd] bg-white p-6 shadow-2xl">
+            <button
+              type="button"
+              aria-label="Close modal"
+              onClick={() => setIsAuthModalOpen(false)}
+              className="absolute right-4 top-4 rounded-md px-2 py-1 text-sm font-bold text-[#5b4f46] transition hover:bg-[#faf6f0]"
+            >
+              x
+            </button>
             <h2 className="text-2xl font-extrabold text-[#1b1714]">Account Required</h2>
             <p className="mt-2 text-sm leading-relaxed text-[#66594f]">
-              Saving flashcards is available to registered users. Create an account or sign in to continue.
+              You need an account to save your flashcards.
             </p>
 
             <div className="mt-5 grid gap-2 sm:grid-cols-2">
@@ -225,13 +233,13 @@ export function AnalyzePage() {
               </Link>
             </div>
 
-            <button
+            {/* <button
               type="button"
               onClick={() => setIsAuthModalOpen(false)}
               className="mt-4 w-full rounded-xl border border-[#d8ccbd] bg-[#fff9f2] px-4 py-3 text-sm font-semibold text-[#5b4f46] transition hover:bg-[#fff0df]"
             >
               Continue as guest
-            </button>
+            </button> */}
           </div>
         </div>
       ) : null}
