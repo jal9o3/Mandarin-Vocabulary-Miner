@@ -25,14 +25,14 @@ export function LandingPage() {
                 to="/paste"
                 className="rounded-xl bg-[#d1451b] px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-[#d1451b]/20 transition hover:-translate-y-0.5 hover:bg-[#b63e19]"
               >
-                Start Analyzer
+                Try it now
               </Link>
-              <Link
+              {/* <Link
                 to="/paste"
                 className="rounded-xl border border-[#1b1714] bg-white/80 px-6 py-3 text-sm font-semibold transition hover:-translate-y-0.5 hover:bg-white"
               >
                 Paste Text
-              </Link>
+              </Link> */}
             </div>
           </div>
 

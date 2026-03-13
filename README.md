@@ -58,6 +58,9 @@ Available endpoints:
 - `POST /api/vocab-screen`
     - JSON body: `{ "text": "..." }`
     - Returns unique words grouped into `HSK 1` to `HSK 9` buckets so users can select known vocabulary before analysis.
+    - HSK lists are sourced from `https://github.com/drkameleon/complete-hsk-vocabulary/tree/main/wordlists/inclusive/new`.
+    - Expected filename format is `<hsk number>.min.json` (for example, `1.min.json`).
+    - The backend reads local copies from `hanlearn_backend/wordlists/inclusive/new/` and falls back to fetching from GitHub raw URLs when a file is missing.
 
 - `POST /api/analyze-file`
     - `multipart/form-data`
