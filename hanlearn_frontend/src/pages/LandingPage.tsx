@@ -6,26 +6,8 @@ export function LandingPage() {
       <div className="pointer-events-none absolute -left-28 top-24 h-64 w-64 rounded-full bg-[#f6aa72]/25 blur-3xl" />
       <div className="pointer-events-none absolute -right-16 top-80 h-72 w-72 rounded-full bg-[#d1451b]/20 blur-3xl" />
 
-      <main className="mx-auto min-h-screen w-full max-w-6xl px-6 pb-16 pt-8 sm:px-10 lg:px-12">
-        <header className="reveal flex items-center justify-between border-b border-[#d6c7b6] pb-5">
-          <div className="flex items-center gap-3">
-            <div className="grid h-10 w-10 place-items-center rounded-lg bg-[#d1451b] text-lg font-extrabold text-white shadow-md">
-              汉
-            </div>
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#8f7f6f]">Hanlearn</p>
-              <p className="text-sm text-[#5b4f46]">Mandarin Vocabulary Miner</p>
-            </div>
-          </div>
-          <Link
-            to="/upload"
-            className="rounded-full border border-[#1b1714] px-5 py-2 text-sm font-semibold transition hover:-translate-y-0.5 hover:bg-[#1b1714] hover:text-white"
-          >
-            Start Mining
-          </Link>
-        </header>
-
-        <section className="mt-12 grid items-center gap-10 lg:grid-cols-[1.25fr_1fr]">
+      <main className="mx-auto min-h-screen w-full max-w-6xl px-6 pb-16 pt-10 sm:px-10 lg:px-12">
+        <section className="mt-2 grid items-center gap-10 lg:grid-cols-[1.25fr_1fr]">
           <div className="space-y-6">
             <p className="mono reveal inline-block rounded-full border border-[#d6c7b6] bg-white/70 px-4 py-1 text-xs uppercase tracking-[0.2em] text-[#7a6c60]">
               Read harder texts, sooner
@@ -40,10 +22,10 @@ export function LandingPage() {
 
             <div className="reveal delay-3 flex flex-wrap gap-3">
               <Link
-                to="/upload"
+                to="/paste"
                 className="rounded-xl bg-[#d1451b] px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-[#d1451b]/20 transition hover:-translate-y-0.5 hover:bg-[#b63e19]"
               >
-                Upload Text
+                Start Analyzer
               </Link>
               <Link
                 to="/paste"

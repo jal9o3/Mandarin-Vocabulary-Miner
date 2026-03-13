@@ -32,6 +32,10 @@ export function AnalyzePage() {
   const [isConverting, setIsConverting] = useState(false)
   const [flashcardMessage, setFlashcardMessage] = useState<string | null>(null)
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
+  const flashcardWords = useMemo(
+    () => (analysis?.words ?? []).filter((row) => !row.is_known).map((row) => ({ word: row.word, pinyin: row.pinyin })),
+    [analysis],
+  )
 
   useEffect(() => {
     const loadAuth = async () => {
@@ -61,14 +65,14 @@ export function AnalyzePage() {
         <section className="rounded-2xl border border-[#d6c7b6] bg-[var(--han-panel)] p-6 shadow-xl shadow-[#bf9f83]/15 sm:p-8">
           <h1 className="text-3xl font-extrabold text-[#1b1714]">Vocabulary Coverage Report</h1>
           <p className="mt-3 text-sm leading-relaxed text-[#66594f]">
-            No analysis is loaded yet. Paste text first so Hanlearn can generate your report.
+            No analysis is loaded yet. Paste text or load a file first so Hanlearn can generate your report.
           </p>
           <div className="mt-6">
             <Link
               to="/paste"
               className="rounded-xl bg-[#d1451b] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#b63e19]"
             >
-              Go to Paste Mode
+              Open Analyzer Input
             </Link>
           </div>
         </section>
@@ -88,11 +92,6 @@ export function AnalyzePage() {
             ? 'HSK 3'
             : 'HSK 2'
   const topUnknownWords = analysis.words.filter((row) => !row.is_known).slice(0, 12)
-  const flashcardWords = useMemo(
-    () => analysis.words.filter((row) => !row.is_known).map((row) => ({ word: row.word, pinyin: row.pinyin })),
-    [analysis.words],
-  )
-
   const handleConvertToFlashcards = async () => {
     if (!isAuthenticated) {
       setIsAuthModalOpen(true)
@@ -194,16 +193,10 @@ export function AnalyzePage() {
 
           <div className="mt-6 flex flex-wrap gap-3">
             <Link
-              to="/upload"
+              to="/paste"
               className="rounded-xl bg-[#d1451b] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#b63e19]"
             >
-              Analyze Another File
-            </Link>
-            <Link
-              to="/paste"
-              className="rounded-xl border border-[#1b1714] bg-white/80 px-6 py-3 text-sm font-semibold transition hover:bg-white"
-            >
-              Analyze New Passage
+              Analyze New Text or File
             </Link>
           </div>
         </section>

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? ''
@@ -30,7 +30,65 @@ export function PastePage() {
   const [selectedWords, setSelectedWords] = useState<string[]>([])
   const [isScreening, setIsScreening] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isLoadingFile, setIsLoadingFile] = useState(false)
+  const [isPastingClipboard, setIsPastingClipboard] = useState(false)
+  const [isDragOver, setIsDragOver] = useState(false)
+  const [loadedFileName, setLoadedFileName] = useState<string | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+
+  const resetSelection = () => {
+    setScreening(null)
+    setSelectedWords([])
+  }
+
+  const applyTextInput = (incomingText: string, sourceFileName?: string) => {
+    setText(incomingText)
+    setLoadedFileName(sourceFileName ?? null)
+    resetSelection()
+  }
+
+  const handleFileSelection = async (file: File | null) => {
+    if (!file) {
+      return
+    }
+
+    setIsLoadingFile(true)
+    setErrorMessage(null)
+    try {
+      const fileText = await file.text()
+      if (!fileText.trim()) {
+        throw new Error('The selected file is empty. Please choose a file with Mandarin text.')
+      }
+      applyTextInput(fileText, file.name)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to read the selected file.'
+      setErrorMessage(message)
+    } finally {
+      setIsLoadingFile(false)
+    }
+  }
+
+  const handlePasteFromClipboard = async () => {
+    if (!navigator.clipboard) {
+      setErrorMessage('Clipboard access is unavailable in this browser. Paste directly into the text field.')
+      return
+    }
+
+    setIsPastingClipboard(true)
+    setErrorMessage(null)
+    try {
+      const clipText = await navigator.clipboard.readText()
+      if (!clipText.trim()) {
+        throw new Error('Clipboard is empty. Copy Mandarin text first and try again.')
+      }
+      applyTextInput(clipText)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to read from clipboard.'
+      setErrorMessage(message)
+    } finally {
+      setIsPastingClipboard(false)
+    }
+  }
 
   const allWordEntries = useMemo(
     () =>
@@ -101,6 +159,7 @@ export function PastePage() {
         groups,
       })
       setSelectedWords([])
+      setLoadedFileName(null)
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unexpected error while loading vocabulary screen.'
       setErrorMessage(message)
@@ -157,36 +216,91 @@ export function PastePage() {
   return (
     <main className="mx-auto min-h-screen w-full max-w-4xl px-6 py-10 sm:px-10">
       <section className="rounded-2xl border border-[#d6c7b6] bg-[var(--han-panel)] p-6 shadow-xl shadow-[#bf9f83]/15 sm:p-8">
-        <h1 className="text-3xl font-extrabold text-[#1b1714]">Paste Mandarin Passage</h1>
-        <p className="mt-2 text-sm leading-relaxed text-[#66594f]">
-          Guest users must first select known words from HSK 1-9 groups before passage analysis runs.
-        </p>
+        <h1 className="text-3xl font-extrabold text-[#1b1714] text-center">Vocab Miner</h1>
+        <p className="mt-2 text-sm leading-relaxed text-[#66594f] text-center">This will extract words that are unfamiliar to you and create flashcards for them.</p>
 
         <form onSubmit={handleScreening}>
+          <div
+            onDragEnter={(event) => {
+              event.preventDefault()
+              setIsDragOver(true)
+            }}
+            onDragOver={(event) => {
+              event.preventDefault()
+              setIsDragOver(true)
+            }}
+            onDragLeave={(event) => {
+              event.preventDefault()
+              setIsDragOver(false)
+            }}
+            onDrop={(event) => {
+              event.preventDefault()
+              setIsDragOver(false)
+              const droppedFile = event.dataTransfer.files?.[0] ?? null
+              void handleFileSelection(droppedFile)
+            }}
+            className={`mt-6 rounded-xl border border-dashed p-4 transition ${
+              isDragOver ? 'border-[#d1451b] bg-[#fff1e7]' : 'border-[#c9b39b] bg-[#fff8ee]'
+            }`}
+          >
+            <div className="flex justify-center">
+              <label className="cursor-pointer rounded-xl border border-[#1b1714] bg-white px-6 py-3 text-sm font-semibold text-[#2d241d] transition hover:bg-[#fff5ea]">
+                Select your document
+                <input
+                  type="file"
+                  accept=".txt,.md,.srt"
+                  className="sr-only"
+                  onChange={(event) => {
+                    const selectedFile = event.target.files?.[0] ?? null
+                    void handleFileSelection(selectedFile)
+                    event.currentTarget.value = ''
+                  }}
+                />
+              </label>
+            </div>
+
+            <p className="mt-3 text-center text-sm text-[#7b654f]">
+              or drop it here.
+              {/* <button
+                type="button"
+                onClick={() => void handlePasteFromClipboard()}
+                disabled={isPastingClipboard}
+                className="font-semibold text-[#8c2f11] underline underline-offset-2 transition hover:text-[#6e220e] disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                {isPastingClipboard ? 'reading clipboard...' : 'paste from clipboard'}
+              </button> */}
+            </p>
+
+            {loadedFileName ? (
+              <p className="mt-3 text-center text-xs font-semibold uppercase tracking-[0.12em] text-[#8d7c6f]">Loaded file: {loadedFileName}</p>
+            ) : null}
+          </div>
+
           <textarea
             rows={12}
             value={text}
-            onChange={(event) => setText(event.target.value)}
-            placeholder="Paste Mandarin text here..."
+            onChange={(event) => {
+              setText(event.target.value)
+              setLoadedFileName(null)
+              if (screening) {
+                resetSelection()
+              }
+            }}
+            placeholder="You can also paste text directly here."
             className="mt-6 w-full rounded-xl border border-[#d8ccbd] bg-[#fffdf8] p-4 text-sm text-[#2d241d] outline-none ring-[#d1451b] placeholder:text-[#a28d79] focus:ring-2"
           />
 
           {errorMessage ? <p className="mt-3 text-sm font-semibold text-[#b42020]">{errorMessage}</p> : null}
 
-          <div className="mt-6 flex flex-wrap gap-3">
+          <div className="mt-6 flex flex-wrap gap-3 justify-center">
             <button
               type="submit"
-              disabled={isScreening}
+              disabled={isScreening || isLoadingFile}
               className="rounded-xl bg-[#d1451b] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#b63e19] disabled:cursor-not-allowed disabled:opacity-70"
             >
-              {isScreening ? 'Building HSK Lists...' : hasVocabularyStep ? 'Refresh HSK Word Groups' : 'Start Vocabulary Selection'}
+              {isScreening ? 'Building HSK Lists...' : hasVocabularyStep ? 'Refresh HSK Word Groups' : 'Analyze'}
             </button>
-            <Link
-              to="/upload"
-              className="rounded-xl border border-[#1b1714] bg-white/80 px-6 py-3 text-sm font-semibold transition hover:bg-white"
-            >
-              Switch to Upload Mode
-            </Link>
+            {isLoadingFile ? <p className="self-center text-sm font-semibold text-[#8c2f11]">Loading file...</p> : null}
           </div>
         </form>
 

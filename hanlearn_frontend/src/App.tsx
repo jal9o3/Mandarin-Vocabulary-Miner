@@ -4,7 +4,7 @@ import { AnalyzePage } from './pages/AnalyzePage'
 import { AccountPage } from './pages/AccountPage'
 import { LandingPage } from './pages/LandingPage'
 import { PastePage } from './pages/PastePage'
-import { UploadPage } from './pages/UploadPage'
+import { NavHeader } from './components/NavHeader'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? ''
 
@@ -37,20 +37,23 @@ function RootEntryPage() {
     return <main className="mx-auto min-h-screen w-full max-w-4xl px-6 py-10 sm:px-10" />
   }
 
-  return isAuthenticated ? <UploadPage /> : <LandingPage />
+  return isAuthenticated ? <PastePage /> : <LandingPage />
 }
 
 function App() {
   return (
-    <Routes>
-      <Route path="/" element={<RootEntryPage />} />
-      <Route path="/landing" element={<LandingPage />} />
-      <Route path="/upload" element={<UploadPage />} />
-      <Route path="/paste" element={<PastePage />} />
-      <Route path="/analyze" element={<AnalyzePage />} />
-      <Route path="/account" element={<AccountPage />} />
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+    <>
+      <NavHeader />
+      <Routes>
+        <Route path="/" element={<RootEntryPage />} />
+        <Route path="/landing" element={<LandingPage />} />
+        <Route path="/upload" element={<Navigate to="/paste" replace />} />
+        <Route path="/paste" element={<PastePage />} />
+        <Route path="/analyze" element={<AnalyzePage />} />
+        <Route path="/account" element={<AccountPage />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </>
   )
 }
 
