@@ -217,7 +217,7 @@ export function PastePage() {
     <main className="mx-auto min-h-screen w-full max-w-4xl px-6 py-10 sm:px-10">
       <section className="rounded-2xl border border-[#d6c7b6] bg-[var(--han-panel)] p-6 shadow-xl shadow-[#bf9f83]/15 sm:p-8">
         <h1 className="text-3xl font-extrabold text-[#1b1714] text-center">Vocab Miner</h1>
-        <p className="mt-2 text-sm leading-relaxed text-[#66594f] text-center">This will extract words that are unfamiliar to you and create flashcards for them.</p>
+        <p className="mt-2 text-sm leading-relaxed text-[#66594f] text-center">Upload or paste Mandarin text to start mining new vocabulary!</p>
 
         <form onSubmit={handleScreening}>
           <div
@@ -245,7 +245,7 @@ export function PastePage() {
           >
             <div className="flex justify-center">
               <label className="cursor-pointer rounded-xl border border-[#1b1714] bg-white px-6 py-3 text-sm font-semibold text-[#2d241d] transition hover:bg-[#fff5ea]">
-                Select your document
+                Select your file
                 <input
                   type="file"
                   accept=".txt,.md,.srt"
