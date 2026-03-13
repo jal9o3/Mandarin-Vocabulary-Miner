@@ -58,11 +58,7 @@ export function AnalyzePage() {
   if (!analysis) {
     return (
       <main className="mx-auto min-h-screen w-full max-w-5xl px-6 py-10 sm:px-10">
-        <Link to="/" className="mono text-xs uppercase tracking-[0.2em] text-[#7a6c60] hover:text-[#1b1714]">
-          &larr; Back to landing
-        </Link>
-
-        <section className="mt-5 rounded-2xl border border-[#d6c7b6] bg-[var(--han-panel)] p-6 shadow-xl shadow-[#bf9f83]/15 sm:p-8">
+        <section className="rounded-2xl border border-[#d6c7b6] bg-[var(--han-panel)] p-6 shadow-xl shadow-[#bf9f83]/15 sm:p-8">
           <h1 className="text-3xl font-extrabold text-[#1b1714]">Vocabulary Coverage Report</h1>
           <p className="mt-3 text-sm leading-relaxed text-[#66594f]">
             No analysis is loaded yet. Paste text first so Hanlearn can generate your report.
@@ -136,11 +132,7 @@ export function AnalyzePage() {
   return (
     <>
       <main className="mx-auto min-h-screen w-full max-w-5xl px-6 py-10 sm:px-10">
-        <Link to="/" className="mono text-xs uppercase tracking-[0.2em] text-[#7a6c60] hover:text-[#1b1714]">
-          &larr; Back to landing
-        </Link>
-
-        <section className="mt-5 rounded-2xl border border-[#d6c7b6] bg-[var(--han-panel)] p-6 shadow-xl shadow-[#bf9f83]/15 sm:p-8">
+        <section className="rounded-2xl border border-[#d6c7b6] bg-[var(--han-panel)] p-6 shadow-xl shadow-[#bf9f83]/15 sm:p-8">
           <h1 className="text-3xl font-extrabold text-[#1b1714]">Vocabulary Coverage Report</h1>
           <p className="mt-2 text-sm leading-relaxed text-[#66594f]">
             Based on your pasted passage, these are the words you likely still need to learn.

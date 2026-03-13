@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
-import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? ''
 
@@ -63,11 +63,7 @@ export function AccountPage() {
 
   return (
     <main className="mx-auto min-h-screen w-full max-w-xl px-6 py-10 sm:px-10">
-      <Link to="/" className="mono text-xs uppercase tracking-[0.2em] text-[#7a6c60] hover:text-[#1b1714]">
-        &larr; Back to landing
-      </Link>
-
-      <section className="mt-5 rounded-2xl border border-[#d6c7b6] bg-[var(--han-panel)] p-6 shadow-xl shadow-[#bf9f83]/15 sm:p-8">
+      <section className="rounded-2xl border border-[#d6c7b6] bg-[var(--han-panel)] p-6 shadow-xl shadow-[#bf9f83]/15 sm:p-8">
         <h1 className="text-3xl font-extrabold text-[#1b1714]">Create Account or Sign In</h1>
         <p className="mt-2 text-sm leading-relaxed text-[#66594f]">
           Saving flashcards requires an account. Create one or sign in to continue.

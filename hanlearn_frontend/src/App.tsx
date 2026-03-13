@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { AnalyzePage } from './pages/AnalyzePage'
 import { AccountPage } from './pages/AccountPage'
@@ -5,10 +6,45 @@ import { LandingPage } from './pages/LandingPage'
 import { PastePage } from './pages/PastePage'
 import { UploadPage } from './pages/UploadPage'
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? ''
+
+function RootEntryPage() {
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null)
+
+  useEffect(() => {
+    const loadAuth = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/auth/me`, {
+          method: 'GET',
+          credentials: 'include',
+        })
+        if (!response.ok) {
+          setIsAuthenticated(false)
+          return
+        }
+
+        const payload = (await response.json()) as { is_authenticated?: unknown }
+        setIsAuthenticated(payload.is_authenticated === true)
+      } catch {
+        setIsAuthenticated(false)
+      }
+    }
+
+    void loadAuth()
+  }, [])
+
+  if (isAuthenticated === null) {
+    return <main className="mx-auto min-h-screen w-full max-w-4xl px-6 py-10 sm:px-10" />
+  }
+
+  return isAuthenticated ? <UploadPage /> : <LandingPage />
+}
+
 function App() {
   return (
     <Routes>
-      <Route path="/" element={<LandingPage />} />
+      <Route path="/" element={<RootEntryPage />} />
+      <Route path="/landing" element={<LandingPage />} />
       <Route path="/upload" element={<UploadPage />} />
       <Route path="/paste" element={<PastePage />} />
       <Route path="/analyze" element={<AnalyzePage />} />

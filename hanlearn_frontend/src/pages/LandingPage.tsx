@@ -49,7 +49,7 @@ export function LandingPage() {
                 to="/paste"
                 className="rounded-xl border border-[#1b1714] bg-white/80 px-6 py-3 text-sm font-semibold transition hover:-translate-y-0.5 hover:bg-white"
               >
-                Paste Passage
+                Paste Text
               </Link>
             </div>
           </div>

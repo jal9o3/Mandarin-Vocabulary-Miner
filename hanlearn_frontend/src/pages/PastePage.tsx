@@ -156,11 +156,7 @@ export function PastePage() {
 
   return (
     <main className="mx-auto min-h-screen w-full max-w-4xl px-6 py-10 sm:px-10">
-      <Link to="/" className="mono text-xs uppercase tracking-[0.2em] text-[#7a6c60] hover:text-[#1b1714]">
-        &larr; Back to landing
-      </Link>
-
-      <section className="mt-5 rounded-2xl border border-[#d6c7b6] bg-[var(--han-panel)] p-6 shadow-xl shadow-[#bf9f83]/15 sm:p-8">
+      <section className="rounded-2xl border border-[#d6c7b6] bg-[var(--han-panel)] p-6 shadow-xl shadow-[#bf9f83]/15 sm:p-8">
         <h1 className="text-3xl font-extrabold text-[#1b1714]">Paste Mandarin Passage</h1>
         <p className="mt-2 text-sm leading-relaxed text-[#66594f]">
           Guest users must first select known words from HSK 1-9 groups before passage analysis runs.
