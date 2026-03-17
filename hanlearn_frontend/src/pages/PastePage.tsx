@@ -1,6 +1,7 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { HskWordSelector } from '../components/HskWordSelector'
 
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? ''
@@ -89,19 +90,6 @@ export function PastePage() {
       setIsPastingClipboard(false)
     }
   }
-
-  const allWordEntries = useMemo(
-    () =>
-      (screening?.groups ?? []).flatMap((group) =>
-        group.words.map((entry) => ({
-          level: group.level,
-          ...entry,
-        })),
-      ),
-    [screening],
-  )
-
-  const selectedWordSet = useMemo(() => new Set(selectedWords), [selectedWords])
 
   const toggleWord = (word: string) => {
     setSelectedWords((current) =>
@@ -210,8 +198,48 @@ export function PastePage() {
     }
   }
 
-  const hasVocabularyStep = screening !== null
-  const totalScreeningWords = allWordEntries.length
+  if (screening) {
+    return (
+      <main className="mx-auto min-h-screen w-full max-w-4xl px-6 py-10 sm:px-10">
+        <section className="rounded-2xl border border-[#d6c7b6] bg-[var(--han-panel)] p-6 shadow-xl shadow-[#bf9f83]/15 sm:p-8">
+          <button
+            type="button"
+            onClick={resetSelection}
+            className="mb-2 rounded-xl border border-[#1b1714] bg-white/80 px-4 py-2 text-sm font-semibold transition hover:bg-white"
+          >
+            ← Back
+          </button>
+          <HskWordSelector
+            screening={screening}
+            selectedWords={selectedWords}
+            onToggleWord={toggleWord}
+            onSelectGroup={selectGroup}
+            onClearGroup={clearGroup}
+          />
+
+          {errorMessage ? <p className="mt-4 text-sm font-semibold text-[#b42020]">{errorMessage}</p> : null}
+
+          <div className="mt-6 flex flex-wrap gap-3">
+            <button
+              type="button"
+              onClick={handleAnalyze}
+              disabled={isSubmitting}
+              className="rounded-xl bg-[#d1451b] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#b63e19] disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              {isSubmitting ? 'Analyzing...' : 'Analyze with Selected Vocabulary'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedWords([])}
+              className="rounded-xl border border-[#1b1714] bg-white/80 px-6 py-3 text-sm font-semibold transition hover:bg-white"
+            >
+              Clear All Selections
+            </button>
+          </div>
+        </section>
+      </main>
+    )
+  }
 
   return (
     <main className="mx-auto min-h-screen w-full max-w-4xl px-6 py-10 sm:px-10">
@@ -282,9 +310,6 @@ export function PastePage() {
             onChange={(event) => {
               setText(event.target.value)
               setLoadedFileName(null)
-              if (screening) {
-                resetSelection()
-              }
             }}
             placeholder="You can also paste text directly here."
             className="mt-6 w-full rounded-xl border border-[#d8ccbd] bg-[#fffdf8] p-4 text-sm text-[#2d241d] outline-none ring-[#d1451b] placeholder:text-[#a28d79] focus:ring-2"
@@ -298,103 +323,11 @@ export function PastePage() {
               disabled={isScreening || isLoadingFile}
               className="rounded-xl bg-[#d1451b] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#b63e19] disabled:cursor-not-allowed disabled:opacity-70"
             >
-              {isScreening ? 'Building HSK Lists...' : hasVocabularyStep ? 'Refresh HSK Word Groups' : 'Analyze'}
+              {isScreening ? 'Building HSK Lists...' : 'Analyze'}
             </button>
             {isLoadingFile ? <p className="self-center text-sm font-semibold text-[#8c2f11]">Loading file...</p> : null}
           </div>
         </form>
-
-        {hasVocabularyStep ? (
-          <section className="mt-8 rounded-xl border border-[#e6dbc9] bg-white p-5">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h2 className="text-xl font-bold text-[#1b1714]">Step 2: Select Known Words</h2>
-                <p className="mt-1 text-sm text-[#66594f]">
-                  {screening.total_unique_words} unique words detected. Select the words you already know from each HSK band.
-                </p>
-              </div>
-              <p className="rounded-full bg-[#fff1e5] px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] text-[#8c2f11]">
-                Selected: {selectedWords.length}/{totalScreeningWords}
-              </p>
-            </div>
-
-            <div className="mt-5 grid gap-4">
-              {screening.groups.map((group) => (
-                <article key={group.level} className="rounded-lg border border-[#eddcc8] bg-[#fffaf2] p-4">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <h3 className="text-base font-bold text-[#2b211b]">{group.level}</h3>
-                    <div className="flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        onClick={() => selectGroup(group)}
-                        className="rounded-full border border-[#d3b89e] bg-white px-3 py-1 text-xs font-semibold text-[#5d4a3a] transition hover:bg-[#fff3e8]"
-                      >
-                        Select all
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => clearGroup(group)}
-                        className="rounded-full border border-[#d3b89e] bg-white px-3 py-1 text-xs font-semibold text-[#5d4a3a] transition hover:bg-[#fff3e8]"
-                      >
-                        Clear
-                      </button>
-                    </div>
-                  </div>
-
-                  {group.words.length ? (
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {group.words.map((entry) => {
-                        const checked = selectedWordSet.has(entry.word)
-                        return (
-                          <label
-                            key={`${group.level}-${entry.word}`}
-                            className={`inline-flex cursor-pointer items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold transition ${
-                              checked
-                                ? 'border-[#d1451b] bg-[#fff0e8] text-[#8c2f11]'
-                                : 'border-[#d8ccbd] bg-white text-[#4e4138] hover:bg-[#fff7ef]'
-                            }`}
-                            title={`${entry.pinyin} | ${entry.occurrences} occurrences`}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={checked}
-                              onChange={() => toggleWord(entry.word)}
-                              className="h-3.5 w-3.5 rounded border-[#bba890] text-[#d1451b]"
-                            />
-                            <span>{entry.word}</span>
-                            <span className="mono text-[10px] uppercase tracking-[0.1em] text-[#8d7c6f]">
-                              {entry.occurrences}x
-                            </span>
-                          </label>
-                        )
-                      })}
-                    </div>
-                  ) : (
-                    <p className="mt-3 text-xs text-[#8d7c6f]">No words detected in this band.</p>
-                  )}
-                </article>
-              ))}
-            </div>
-
-            <div className="mt-6 flex flex-wrap gap-3">
-              <button
-                type="button"
-                onClick={handleAnalyze}
-                disabled={isSubmitting || isScreening}
-                className="rounded-xl bg-[#d1451b] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#b63e19] disabled:cursor-not-allowed disabled:opacity-70"
-              >
-                {isSubmitting ? 'Analyzing...' : 'Analyze with Selected Vocabulary'}
-              </button>
-              <button
-                type="button"
-                onClick={() => setSelectedWords([])}
-                className="rounded-xl border border-[#1b1714] bg-white/80 px-6 py-3 text-sm font-semibold transition hover:bg-white"
-              >
-                Clear All Selections
-              </button>
-            </div>
-          </section>
-        ) : null}
       </section>
     </main>
   )
