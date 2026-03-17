@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { HskWordSelector } from '../components/HskWordSelector'
 
 
@@ -24,8 +24,20 @@ type ScreeningPayload = {
   groups: ScreeningGroup[]
 }
 
+type ReturnToSelectionState = {
+  text: string
+  screening: ScreeningPayload
+  selectedWords: string[]
+}
+
+type PasteLocationState = {
+  returnToSelection?: ReturnToSelectionState
+}
+
 export function PastePage() {
   const navigate = useNavigate()
+  const location = useLocation()
+  const locationState = (location.state as PasteLocationState | null) ?? null
   const [text, setText] = useState('')
   const [screening, setScreening] = useState<ScreeningPayload | null>(null)
   const [selectedWords, setSelectedWords] = useState<string[]>([])
@@ -36,6 +48,20 @@ export function PastePage() {
   const [isDragOver, setIsDragOver] = useState(false)
   const [loadedFileName, setLoadedFileName] = useState<string | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+
+  useEffect(() => {
+    const returnState = locationState?.returnToSelection
+    if (!returnState) {
+      return
+    }
+
+    setText(returnState.text)
+    setScreening(returnState.screening)
+    setSelectedWords(returnState.selectedWords)
+    setLoadedFileName(null)
+    setErrorMessage(null)
+    navigate(location.pathname, { replace: true, state: null })
+  }, [location.pathname, locationState, navigate])
 
   const resetSelection = () => {
     setScreening(null)
@@ -188,6 +214,11 @@ export function PastePage() {
         state: {
           analysis: payload,
           sourceText: trimmedText,
+          selectionState: {
+            text: trimmedText,
+            screening,
+            selectedWords,
+          },
         },
       })
     } catch (error) {

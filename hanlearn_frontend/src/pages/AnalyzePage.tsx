@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useLocation } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? ''
 
@@ -22,9 +22,27 @@ type AnalysisPayload = {
 type AnalyzeLocationState = {
   analysis?: AnalysisPayload
   sourceText?: string
+  selectionState?: {
+    text: string
+    screening: {
+      cleaned_text: string
+      total_unique_words: number
+      total_occurrences: number
+      groups: Array<{
+        level: string
+        words: Array<{
+          word: string
+          pinyin: string
+          occurrences: number
+        }>
+      }>
+    } | null
+    selectedWords: string[]
+  }
 }
 
 export function AnalyzePage() {
+  const navigate = useNavigate()
   const location = useLocation()
   const state = (location.state as AnalyzeLocationState | null) ?? null
   const analysis = state?.analysis
@@ -100,6 +118,23 @@ export function AnalyzePage() {
 
   const unknownCount = analysis.unknown_words.length
   const topUnknownWords = analysis.words.filter((row) => !row.is_known).slice(0, 12)
+  const handleBackToSelection = () => {
+    if (!state?.selectionState?.screening) {
+      navigate('/paste')
+      return
+    }
+
+    navigate('/paste', {
+      state: {
+        returnToSelection: {
+          text: state.selectionState.text,
+          screening: state.selectionState.screening,
+          selectedWords: state.selectionState.selectedWords,
+        },
+      },
+    })
+  }
+
   const handleConvertToFlashcards = async () => {
     if (!isAuthenticated) {
       setIsAuthModalOpen(true)
@@ -140,6 +175,13 @@ export function AnalyzePage() {
     <>
       <main className="mx-auto min-h-screen w-full max-w-5xl px-6 py-10 sm:px-10">
         <section className="rounded-2xl border border-[#d6c7b6] bg-[var(--han-panel)] p-6 shadow-xl shadow-[#bf9f83]/15 sm:p-8">
+          <button
+            type="button"
+            onClick={handleBackToSelection}
+            className="rounded-xl border border-[#1b1714] bg-white/80 px-4 py-2 text-sm font-semibold transition hover:bg-white"
+          >
+            ← Back
+          </button>
           <h1 className="text-3xl font-extrabold text-[#1b1714] text-center">Text Analysis</h1>
           {/* <p className="mt-2 text-sm leading-relaxed text-[#66594f] text-center">
             Based on your pasted passage, these are the words you likely still need to learn.
