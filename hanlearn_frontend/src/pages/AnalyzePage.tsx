@@ -17,6 +17,13 @@ type AnalysisPayload = {
   total_occurrences: number
   words: RankedWord[]
   unknown_words: string[]
+  priority_drill_set?: Array<{
+    word: string
+    info: {
+      pronunciation?: string
+      meanings?: string[]
+    } | null
+  }>
 }
 
 type AnalyzeLocationState = {
@@ -117,7 +124,11 @@ export function AnalyzePage() {
   }
 
   const unknownCount = analysis.unknown_words.length
-  const topUnknownWords = analysis.words.filter((row) => !row.is_known).slice(0, 12)
+  const priorityDrillSet =
+    analysis.priority_drill_set ?? analysis.words.filter((row) => !row.is_known).slice(0, 12).map((row) => ({
+      word: row.word,
+      info: null,
+    }))
   const handleBackToSelection = () => {
     if (!state?.selectionState?.screening) {
       navigate('/paste')
@@ -221,20 +232,22 @@ export function AnalyzePage() {
 
           <div className="mt-6 rounded-xl border border-[#e6dbc9] bg-white p-5">
             <h2 className="text-lg font-bold text-[#1b1714]">Priority drill set</h2>
-            <div className="mt-3 flex flex-wrap gap-2 text-sm font-semibold">
-              {topUnknownWords.map((row) => (
-                <span
-                  key={`${row.word}-${row.occurrences}`}
-                  className="rounded-full bg-[var(--han-accent-soft)] px-3 py-1 text-[#8c2f11]"
-                  title={`${row.pinyin} | ${row.occurrences} occurrences`}
-                >
-                  {row.word}
-                </span>
+            <div className="mt-3 grid gap-3">
+              {priorityDrillSet.map((item, index) => (
+                <article key={`${item.word}-${index}`} className="rounded-lg border border-[#f0e3d5] bg-[#fffbf4] p-3">
+                  <p className="text-sm font-bold text-[#8c2f11]">{item.word}</p>
+                  <p className="mt-2 text-xs font-semibold uppercase tracking-[0.1em] text-[#8d7c6f]">Pronunciation</p>
+                  <p className="mt-1 text-sm text-[#4b3f36]">{item.info?.pronunciation ?? 'N/A'}</p>
+                  <p className="mt-2 text-xs font-semibold uppercase tracking-[0.1em] text-[#8d7c6f]">Meanings</p>
+                  <p className="mt-1 text-sm text-[#4b3f36]">
+                    {(item.info?.meanings ?? []).length ? item.info?.meanings?.join('; ') : 'N/A'}
+                  </p>
+                </article>
               ))}
-              {!topUnknownWords.length ? (
-                <span className="rounded-full bg-[var(--han-accent-soft)] px-3 py-1 text-[#8c2f11]">
+              {!priorityDrillSet.length ? (
+                <p className="rounded-lg bg-[var(--han-accent-soft)] px-3 py-2 text-sm font-semibold text-[#8c2f11]">
                   Great job, no unknown words found
-                </span>
+                </p>
               ) : null}
             </div>
 

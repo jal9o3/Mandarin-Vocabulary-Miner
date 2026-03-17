@@ -101,6 +101,170 @@ def _extract_entry_words(entry: dict) -> set[str]:
     return words
 
 
+def _find_form_for_word(entry: dict, word: str) -> dict | None:
+    forms = entry.get("f")
+    if not isinstance(forms, list):
+        return None
+
+    for form in forms:
+        if not isinstance(form, dict):
+            continue
+        surface = form.get("t")
+        if isinstance(surface, str) and surface.strip() == word:
+            return form
+
+    for form in forms:
+        if isinstance(form, dict):
+            return form
+
+    return None
+
+
+@lru_cache(maxsize=1)
+def _build_wordlist_info_lookup() -> dict[str, dict]:
+    lookup: dict[str, dict] = {}
+
+    for level in HSK_LEVELS:
+        for entry in _read_level_payload(level):
+            for word in _extract_entry_words(entry):
+                form = _find_form_for_word(entry, word)
+                if form is None:
+                    continue
+
+                existing = lookup.get(word)
+                if existing is not None and existing.get("level", 99) <= level:
+                    continue
+
+                lookup[word] = {
+                    "level": level,
+                    "traditional": form.get("t"),
+                    "info": form.get("i"),
+                    "meanings": form.get("m"),
+                    "classifiers": form.get("c"),
+                }
+
+    return lookup
+
+
+def _resolve_wordlist_info(word: str, lookup: dict[str, dict]) -> dict | None:
+    exact = lookup.get(word)
+    if exact is not None:
+        return exact
+
+    # Fall back to best-effort decomposition using existing wordlist entries.
+    # This keeps the payload sourced from JSON wordlists even for unknown compounds.
+    parts: list[dict] = []
+
+    if len(word) > 1:
+        for token in jieba.cut(word):
+            token = token.strip()
+            if not token or token == word:
+                continue
+            token_info = lookup.get(token)
+            if token_info is not None:
+                parts.append({"word": token, "info": token_info})
+
+    if not parts:
+        for char in word:
+            char_info = lookup.get(char)
+            if char_info is not None:
+                parts.append({"word": char, "info": char_info})
+
+    if not parts:
+        return {
+            "match": "not_found",
+            "word": word,
+            "note": "No match found in currently available local wordlist files.",
+        }
+
+    return {
+        "match": "fallback",
+        "parts": parts,
+    }
+
+
+def _format_priority_info(word: str, resolved_info: dict | None) -> dict:
+    def _join_meanings(meanings: list[str]) -> list[str]:
+        cleaned = [m.strip() for m in meanings if isinstance(m, str) and m.strip()]
+        seen: set[str] = set()
+        deduped: list[str] = []
+        for meaning in cleaned:
+            if meaning in seen:
+                continue
+            seen.add(meaning)
+            deduped.append(meaning)
+        return deduped
+
+    if not isinstance(resolved_info, dict):
+        return {
+            "pronunciation": _word_to_pinyin(word),
+            "meanings": ["No meaning found in current wordlists."],
+        }
+
+    if resolved_info.get("match") == "fallback":
+        parts = resolved_info.get("parts")
+        if not isinstance(parts, list):
+            return {
+                "pronunciation": _word_to_pinyin(word),
+                "meanings": ["No meaning found in current wordlists."],
+            }
+
+        pronunciations: list[str] = []
+        meanings: list[str] = []
+        for part in parts:
+            if not isinstance(part, dict):
+                continue
+            part_word = part.get("word")
+            part_info = part.get("info")
+            if not isinstance(part_info, dict):
+                continue
+
+            pinyin_info = part_info.get("info")
+            if isinstance(pinyin_info, dict):
+                y = pinyin_info.get("y")
+                if isinstance(y, str) and y.strip():
+                    label = f"{part_word}: {y.strip()}" if isinstance(part_word, str) and part_word.strip() else y.strip()
+                    pronunciations.append(label)
+
+            part_meanings = part_info.get("meanings")
+            if isinstance(part_meanings, list):
+                for meaning in part_meanings:
+                    if isinstance(meaning, str) and meaning.strip():
+                        meanings.append(meaning)
+
+        readable_meanings = _join_meanings(meanings)
+        pronunciation = "; ".join(pronunciations) if pronunciations else _word_to_pinyin(word)
+        if not readable_meanings:
+            readable_meanings = ["No meaning found in current wordlists."]
+        return {
+            "pronunciation": pronunciation,
+            "meanings": readable_meanings,
+        }
+
+    if resolved_info.get("match") == "not_found":
+        return {
+            "pronunciation": _word_to_pinyin(word),
+            "meanings": ["No meaning found in current wordlists."],
+        }
+
+    pinyin_info = resolved_info.get("info")
+    pronunciation = _word_to_pinyin(word)
+    if isinstance(pinyin_info, dict):
+        y = pinyin_info.get("y")
+        if isinstance(y, str) and y.strip():
+            pronunciation = y.strip()
+
+    meanings = resolved_info.get("meanings")
+    readable_meanings = _join_meanings(meanings if isinstance(meanings, list) else [])
+    if not readable_meanings:
+        readable_meanings = ["No meaning found in current wordlists."]
+
+    return {
+        "pronunciation": pronunciation,
+        "meanings": readable_meanings,
+    }
+
+
 def _read_level_payload(level: int) -> list[dict]:
     filename = f"{level}.min.json"
     local_file = WORDLISTS_DIR / filename
@@ -221,6 +385,20 @@ def analyze_text(text: str, vocab_text: str) -> dict:
         )
 
     unknown_words = [row["word"] for row in ranked_words if not row["is_known"]]
+    wordlist_info_lookup = _build_wordlist_info_lookup()
+    priority_drill_set = []
+    for row in ranked_words:
+        if row["is_known"]:
+            continue
+        resolved_info = _resolve_wordlist_info(row["word"], wordlist_info_lookup)
+        priority_drill_set.append(
+            {
+                "word": row["word"],
+                "info": _format_priority_info(row["word"], resolved_info),
+            }
+        )
+        if len(priority_drill_set) >= 12:
+            break
 
     return {
         "cleaned_text": cleaned_text,
@@ -228,4 +406,5 @@ def analyze_text(text: str, vocab_text: str) -> dict:
         "total_occurrences": total_occurrences,
         "words": ranked_words,
         "unknown_words": unknown_words,
+        "priority_drill_set": priority_drill_set,
     }

@@ -81,7 +81,13 @@ class MinerApiTests(TestCase):
         self.assertGreater(data["known_percentage"], 0)
         self.assertIn("words", data)
         self.assertIn("unknown_words", data)
+        self.assertIn("priority_drill_set", data)
         self.assertGreater(len(data["words"]), 0)
+        self.assertIsInstance(data["priority_drill_set"], list)
+        if data["priority_drill_set"]:
+            first_item = data["priority_drill_set"][0]
+            self.assertIn("word", first_item)
+            self.assertIn("info", first_item)
 
     def test_analyze_text_rejects_non_string_text(self):
         response = self.client.post(
