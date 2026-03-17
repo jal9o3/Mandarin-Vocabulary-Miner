@@ -137,6 +137,13 @@ export function AnalyzePage() {
             Based on your pasted passage, these are the words you likely still need to learn.
           </p>
 
+          {state?.sourceText ? (
+            <div className="mt-6 rounded-xl border border-[#e6dbc9] bg-white p-5">
+              <h2 className="text-lg font-bold text-[#1b1714]">Analyzed passage</h2>
+              <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-[#4b3f36]">{state.sourceText}</p>
+            </div>
+          ) : null}
+
           <div className="mt-6 grid gap-4 sm:grid-cols-3">
             <div className="rounded-xl border border-[#e6dbc9] bg-[#fff8ee] p-4">
               <p className="text-xs uppercase tracking-[0.16em] text-[#8d7c6f]">Coverage</p>
@@ -183,13 +190,6 @@ export function AnalyzePage() {
               {flashcardMessage ? <p className="mt-3 text-sm font-semibold text-[#8c2f11]">{flashcardMessage}</p> : null}
             </div>
           </div>
-
-          {state?.sourceText ? (
-            <div className="mt-6 rounded-xl border border-[#e6dbc9] bg-white p-5">
-              <h2 className="text-lg font-bold text-[#1b1714]">Analyzed passage</h2>
-              <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-[#4b3f36]">{state.sourceText}</p>
-            </div>
-          ) : null}
 
           <div className="mt-6 flex flex-wrap gap-3">
             {/* <Link
