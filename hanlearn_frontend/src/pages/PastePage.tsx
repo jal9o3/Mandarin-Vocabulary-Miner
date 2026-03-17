@@ -219,21 +219,22 @@ export function PastePage() {
 
           {errorMessage ? <p className="mt-4 text-sm font-semibold text-[#b42020]">{errorMessage}</p> : null}
 
-          <div className="mt-6 flex flex-wrap gap-3">
+          <div className="mt-6 flex flex-wrap gap-3 justify-end">
+            
+            <button
+              type="button"
+              onClick={() => setSelectedWords([])}
+              className="rounded-xl border border-[#1b1714] bg-white/80 px-6 py-3 text-sm font-semibold transition hover:bg-white"
+            >
+              Clear All
+            </button>
             <button
               type="button"
               onClick={handleAnalyze}
               disabled={isSubmitting}
               className="rounded-xl bg-[#d1451b] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#b63e19] disabled:cursor-not-allowed disabled:opacity-70"
             >
-              {isSubmitting ? 'Analyzing...' : 'Analyze with Selected Vocabulary'}
-            </button>
-            <button
-              type="button"
-              onClick={() => setSelectedWords([])}
-              className="rounded-xl border border-[#1b1714] bg-white/80 px-6 py-3 text-sm font-semibold transition hover:bg-white"
-            >
-              Clear All Selections
+              {isSubmitting ? 'Loading...' : 'Confirm'}
             </button>
           </div>
         </section>
