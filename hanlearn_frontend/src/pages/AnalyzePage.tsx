@@ -36,6 +36,24 @@ export function AnalyzePage() {
     () => (analysis?.words ?? []).filter((row) => !row.is_known).map((row) => ({ word: row.word, pinyin: row.pinyin })),
     [analysis],
   )
+  const unknownWordSet = useMemo(() => new Set((analysis?.unknown_words ?? []).filter((word) => word.length > 0)), [analysis])
+  const highlightedPassageParts = useMemo(() => {
+    const sourceText = state?.sourceText ?? ''
+    if (!sourceText.length) {
+      return [sourceText]
+    }
+
+    const uniqueUnknownWords = [...unknownWordSet]
+    if (!uniqueUnknownWords.length) {
+      return [sourceText]
+    }
+
+    const escapedWords = uniqueUnknownWords
+      .sort((a, b) => b.length - a.length)
+      .map((word) => word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+    const matcher = new RegExp(`(${escapedWords.join('|')})`, 'g')
+    return sourceText.split(matcher).filter((part) => part.length > 0)
+  }, [state?.sourceText, unknownWordSet])
 
   useEffect(() => {
     const loadAuth = async () => {
@@ -81,16 +99,6 @@ export function AnalyzePage() {
   }
 
   const unknownCount = analysis.unknown_words.length
-  const suggestedHsk =
-    analysis.known_percentage >= 95
-      ? 'HSK 6'
-      : analysis.known_percentage >= 85
-        ? 'HSK 5'
-        : analysis.known_percentage >= 70
-          ? 'HSK 4'
-          : analysis.known_percentage >= 55
-            ? 'HSK 3'
-            : 'HSK 2'
   const topUnknownWords = analysis.words.filter((row) => !row.is_known).slice(0, 12)
   const handleConvertToFlashcards = async () => {
     if (!isAuthenticated) {
@@ -132,31 +140,41 @@ export function AnalyzePage() {
     <>
       <main className="mx-auto min-h-screen w-full max-w-5xl px-6 py-10 sm:px-10">
         <section className="rounded-2xl border border-[#d6c7b6] bg-[var(--han-panel)] p-6 shadow-xl shadow-[#bf9f83]/15 sm:p-8">
-          <h1 className="text-3xl font-extrabold text-[#1b1714]">Vocabulary Coverage Report</h1>
-          <p className="mt-2 text-sm leading-relaxed text-[#66594f]">
+          <h1 className="text-3xl font-extrabold text-[#1b1714] text-center">Text Analysis</h1>
+          {/* <p className="mt-2 text-sm leading-relaxed text-[#66594f] text-center">
             Based on your pasted passage, these are the words you likely still need to learn.
-          </p>
+          </p> */}
 
           {state?.sourceText ? (
             <div className="mt-6 rounded-xl border border-[#e6dbc9] bg-white p-5">
-              <h2 className="text-lg font-bold text-[#1b1714]">Analyzed passage</h2>
-              <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-[#4b3f36]">{state.sourceText}</p>
+              {/* <h2 className="text-lg font-bold text-[#1b1714]">Analyzed passage</h2> */}
+              <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-[#4b3f36]">
+                {highlightedPassageParts.map((part, index) =>
+                  unknownWordSet.has(part) ? (
+                    <span key={`${part}-${index}`} className="text-[#b42020]">
+                      {part}
+                    </span>
+                  ) : (
+                    <span key={`${part}-${index}`}>{part}</span>
+                  ),
+                )}
+              </p>
             </div>
           ) : null}
 
-          <div className="mt-6 grid gap-4 sm:grid-cols-3">
+          <div className="mt-6 grid gap-4 sm:grid-cols-2">
             <div className="rounded-xl border border-[#e6dbc9] bg-[#fff8ee] p-4">
-              <p className="text-xs uppercase tracking-[0.16em] text-[#8d7c6f]">Coverage</p>
+              <p className="text-xs uppercase tracking-[0.16em] text-[#8d7c6f]">Readability Estimate</p>
               <p className="mt-1 text-3xl font-extrabold text-[#1b1714]">{analysis.known_percentage.toFixed(1)}%</p>
             </div>
             <div className="rounded-xl border border-[#e6dbc9] bg-[#fff8ee] p-4">
               <p className="text-xs uppercase tracking-[0.16em] text-[#8d7c6f]">Unknown words</p>
               <p className="mt-1 text-3xl font-extrabold text-[#1b1714]">{unknownCount}</p>
             </div>
-            <div className="rounded-xl border border-[#e6dbc9] bg-[#fff8ee] p-4">
+            {/* <div className="rounded-xl border border-[#e6dbc9] bg-[#fff8ee] p-4">
               <p className="text-xs uppercase tracking-[0.16em] text-[#8d7c6f]">Suggested HSK target</p>
               <p className="mt-1 text-3xl font-extrabold text-[#1b1714]">{suggestedHsk}</p>
-            </div>
+            </div> */}
           </div>
 
           <div className="mt-6 rounded-xl border border-[#e6dbc9] bg-white p-5">
