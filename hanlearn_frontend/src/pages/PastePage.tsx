@@ -355,7 +355,7 @@ export function PastePage() {
               disabled={isScreening || isLoadingFile}
               className="rounded-xl bg-[#d1451b] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#b63e19] disabled:cursor-not-allowed disabled:opacity-70"
             >
-              {isScreening ? 'Building HSK Lists...' : 'Analyze'}
+              {isScreening ? 'Loading...' : 'Analyze'}
             </button>
             {isLoadingFile ? <p className="self-center text-sm font-semibold text-[#8c2f11]">Loading file...</p> : null}
           </div>
