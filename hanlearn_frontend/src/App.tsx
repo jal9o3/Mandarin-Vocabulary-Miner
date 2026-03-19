@@ -3,6 +3,7 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import { AnalyzePage } from './pages/AnalyzePage'
 import { AccountPage } from './pages/AccountPage'
 import { LandingPage } from './pages/LandingPage'
+import { LibraryPage } from './pages/LibraryPage'
 import { LoginPage } from './pages/LoginPage'
 import { PastePage } from './pages/PastePage'
 import { SignupPage } from './pages/SignupPage'
@@ -50,6 +51,7 @@ function App() {
         <Route path="/" element={<RootEntryPage />} />
         <Route path="/landing" element={<LandingPage />} />
         <Route path="/upload" element={<Navigate to="/paste" replace />} />
+        <Route path="/library" element={<LibraryPage />} />
         <Route path="/paste" element={<PastePage />} />
         <Route path="/analyze" element={<AnalyzePage />} />
         <Route path="/account" element={<AccountPage />} />
