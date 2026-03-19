@@ -18,7 +18,7 @@ export function NavHeader() {
 
         <nav className="flex flex-wrap items-center gap-2">
           <NavLink
-            to="/paste"
+            to="/login"
             className={({ isActive }) =>
               `${navItemBase} ${isActive ? 'bg-[#d1451b] text-white' : 'border border-[#1b1714] text-[#1b1714] hover:bg-[#1b1714] hover:text-white'}`
             }
@@ -26,7 +26,7 @@ export function NavHeader() {
             Log in
           </NavLink>
           <NavLink
-            to="/account"
+            to="/signup"
             className={({ isActive }) =>
               `${navItemBase} ${isActive ? 'bg-[#d1451b] text-white' : 'border border-[#1b1714] text-[#1b1714] hover:bg-[#1b1714] hover:text-white'}`
             }

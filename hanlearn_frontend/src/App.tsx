@@ -3,7 +3,9 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import { AnalyzePage } from './pages/AnalyzePage'
 import { AccountPage } from './pages/AccountPage'
 import { LandingPage } from './pages/LandingPage'
+import { LoginPage } from './pages/LoginPage'
 import { PastePage } from './pages/PastePage'
+import { SignupPage } from './pages/SignupPage'
 import { NavHeader } from './components/NavHeader'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? ''
@@ -51,6 +53,8 @@ function App() {
         <Route path="/paste" element={<PastePage />} />
         <Route path="/analyze" element={<AnalyzePage />} />
         <Route path="/account" element={<AccountPage />} />
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/signup" element={<SignupPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </>
