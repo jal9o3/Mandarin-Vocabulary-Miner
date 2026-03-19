@@ -163,7 +163,7 @@ export function NavHeader() {
                   `${navItemBase} ${isActive ? 'bg-[#d1451b] text-white' : 'border border-[#1b1714] text-[#1b1714] hover:bg-[#1b1714] hover:text-white'}`
                 }
               >
-                Log in
+                Login
               </NavLink>
               <NavLink
                 to="/signup"

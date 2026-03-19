@@ -48,9 +48,9 @@ export function LoginPage() {
   return (
     <main className="mx-auto min-h-screen w-full max-w-xl px-6 py-10 sm:px-10">
       <section className="rounded-2xl border border-[#d6c7b6] bg-[var(--han-panel)] p-6 shadow-xl shadow-[#bf9f83]/15 sm:p-8">
-        <h1 className="text-3xl font-extrabold text-[#1b1714]">Log In</h1>
-        <p className="mt-2 text-sm leading-relaxed text-[#66594f]">
-          Log in to access your vocabulary bank and text library.
+        <h1 className="text-3xl font-extrabold text-[#1b1714] text-center">Hanlearn</h1>
+        <p className="mt-2 text-sm leading-relaxed text-[#66594f] text-center">
+          Login to your account.
         </p>
 
         <form className="mt-5 space-y-3" onSubmit={handleSubmit}>
@@ -83,7 +83,7 @@ export function LoginPage() {
             disabled={isSubmitting}
             className="w-full rounded-xl bg-[#d1451b] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#b63e19] disabled:cursor-not-allowed disabled:opacity-70"
           >
-            {isSubmitting ? 'Please wait…' : 'Sign In'}
+            {isSubmitting ? 'Please wait…' : 'Log in'}
           </button>
         </form>
 
