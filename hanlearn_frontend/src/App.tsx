@@ -7,6 +7,7 @@ import { LibraryPage } from './pages/LibraryPage'
 import { LoginPage } from './pages/LoginPage'
 import { PastePage } from './pages/PastePage'
 import { SignupPage } from './pages/SignupPage'
+import { FlashcardReviewPage } from './pages/FlashcardReviewPage'
 import { NavHeader } from './components/NavHeader'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? ''
@@ -57,6 +58,7 @@ function App() {
         <Route path="/account" element={<AccountPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/signup" element={<SignupPage />} />
+        <Route path="/review" element={<FlashcardReviewPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </>

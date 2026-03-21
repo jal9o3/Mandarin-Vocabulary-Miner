@@ -109,6 +109,14 @@ export function NavHeader() {
               >
                 Library
               </NavLink>
+              <NavLink
+                to="/review"
+                className={({ isActive }) =>
+                  `${navItemBase} ${isActive ? 'bg-[#d1451b] text-white' : 'border border-[#1b1714] text-[#1b1714] hover:bg-[#1b1714] hover:text-white'}`
+                }
+              >
+                Flashcards
+              </NavLink>
               <div ref={profileMenuRef} className="relative">
                 <button
                   type="button"
