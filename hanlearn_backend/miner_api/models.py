@@ -6,6 +6,7 @@ class UserFlashcard(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="flashcards")
     word = models.CharField(max_length=64)
     pinyin = models.CharField(max_length=128, blank=True)
+    meaning = models.TextField(blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
