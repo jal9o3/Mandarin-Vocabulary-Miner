@@ -8,7 +8,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_http_methods
 
 from .models import UserFlashcard
-from .services import analyze_text, build_vocab_screen, load_vocab, parse_vocab_text, save_vocab
+from .services import analyze_text, build_vocab_screen, load_vocab, parse_vocab_text, resolve_word_flashcard_info, save_vocab
 
 
 VOCAB_FILE = settings.BASE_DIR / "vocab.txt"
@@ -178,26 +178,67 @@ def create_flashcards_view(request: HttpRequest) -> JsonResponse:
     if not isinstance(words_payload, list):
         return JsonResponse({"error": "Provide 'words' as a list."}, status=400)
 
-    flashcards_to_create = []
+    pending_entries: dict[tuple[str, str], str] = {}
     for item in words_payload:
         word = ""
         pinyin_value = ""
+        meanings: list[str] = []
         if isinstance(item, dict):
             raw_word = item.get("word")
             raw_pinyin = item.get("pinyin")
             word = raw_word.strip() if isinstance(raw_word, str) else ""
             pinyin_value = raw_pinyin.strip() if isinstance(raw_pinyin, str) else ""
+            raw_meaning = item.get("meaning")
+            raw_meanings = item.get("meanings")
+            if isinstance(raw_meaning, str) and raw_meaning.strip():
+                meanings = [raw_meaning.strip()]
+            elif isinstance(raw_meanings, list):
+                meanings = [meaning.strip() for meaning in raw_meanings if isinstance(meaning, str) and meaning.strip()]
         elif isinstance(item, str):
             word = item.strip()
 
         if not word:
             continue
 
-        flashcards_to_create.append(UserFlashcard(user=request.user, word=word, pinyin=pinyin_value))
+        if not pinyin_value or not meanings:
+            resolved = resolve_word_flashcard_info(word)
+            if not pinyin_value:
+                resolved_pinyin = resolved.get("pinyin")
+                if isinstance(resolved_pinyin, str) and resolved_pinyin.strip():
+                    pinyin_value = resolved_pinyin.strip()
+            if not meanings:
+                resolved_meanings = resolved.get("meanings")
+                if isinstance(resolved_meanings, list):
+                    meanings = [meaning.strip() for meaning in resolved_meanings if isinstance(meaning, str) and meaning.strip()]
 
-    if not flashcards_to_create:
+        meaning_rows = meanings or [""]
+        for meaning in meaning_rows:
+            key = (word, meaning)
+            # Keep first resolved pinyin for the (word, meaning) pair.
+            if key in pending_entries:
+                continue
+            pending_entries[key] = pinyin_value
+
+    if not pending_entries:
         return JsonResponse({"created": 0, "total": UserFlashcard.objects.filter(user=request.user).count()})
+
+    candidate_words = {word for word, _ in pending_entries.keys()}
+    candidate_meanings = {meaning for _, meaning in pending_entries.keys()}
+    existing_pairs = set(
+        UserFlashcard.objects.filter(
+            user=request.user,
+            word__in=candidate_words,
+            meaning__in=candidate_meanings,
+        ).values_list("word", "meaning")
+    )
+
+    new_pairs = set(pending_entries.keys()) - existing_pairs
+    flashcards_to_create = [
+        UserFlashcard(user=request.user, word=word, pinyin=pending_entries[(word, meaning)], meaning=meaning)
+        for word, meaning in pending_entries.keys()
+    ]
 
     UserFlashcard.objects.bulk_create(flashcards_to_create, ignore_conflicts=True)
     total = UserFlashcard.objects.filter(user=request.user).count()
-    return JsonResponse({"created": len(flashcards_to_create), "total": total})
+    created_words = len({word for word, _ in new_pairs})
+    return JsonResponse({"created": created_words, "total": total})

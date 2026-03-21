@@ -408,3 +408,29 @@ def analyze_text(text: str, vocab_text: str) -> dict:
         "unknown_words": unknown_words,
         "priority_drill_set": priority_drill_set,
     }
+
+
+def resolve_word_flashcard_info(word: str) -> dict:
+    normalized_word = word.strip()
+    if not normalized_word:
+        return {
+            "pinyin": "",
+            "meanings": [],
+        }
+
+    lookup = _build_wordlist_info_lookup()
+    resolved_info = _resolve_wordlist_info(normalized_word, lookup)
+    formatted = _format_priority_info(normalized_word, resolved_info)
+
+    pronunciation = formatted.get("pronunciation")
+    pinyin_value = pronunciation.strip() if isinstance(pronunciation, str) else _word_to_pinyin(normalized_word)
+    meanings_value = formatted.get("meanings")
+    meanings = [m.strip() for m in meanings_value if isinstance(m, str) and m.strip()] if isinstance(meanings_value, list) else []
+
+    if meanings == ["No meaning found in current wordlists."]:
+        meanings = []
+
+    return {
+        "pinyin": pinyin_value,
+        "meanings": meanings,
+    }

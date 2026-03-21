@@ -56,6 +56,7 @@ export function AnalyzePage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [isConverting, setIsConverting] = useState(false)
   const [flashcardMessage, setFlashcardMessage] = useState<string | null>(null)
+  const [flashcardToast, setFlashcardToast] = useState<string | null>(null)
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
   const flashcardWords = useMemo(
     () => (analysis?.words ?? []).filter((row) => !row.is_known).map((row) => ({ word: row.word, pinyin: row.pinyin })),
@@ -101,6 +102,15 @@ export function AnalyzePage() {
 
     void loadAuth()
   }, [])
+
+  useEffect(() => {
+    if (!flashcardToast) {
+      return
+    }
+
+    const timeoutId = window.setTimeout(() => setFlashcardToast(null), 3200)
+    return () => window.clearTimeout(timeoutId)
+  }, [flashcardToast])
 
   if (!analysis) {
     return (
@@ -164,16 +174,14 @@ export function AnalyzePage() {
         body: JSON.stringify({ words: flashcardWords }),
       })
 
-      const payload = (await response.json()) as { error?: unknown; total?: unknown }
+      const payload = (await response.json()) as { error?: unknown; total?: unknown; created?: unknown }
       if (!response.ok) {
         const error = typeof payload.error === 'string' ? payload.error : 'Failed to create flashcards.'
         throw new Error(error)
       }
 
-      const total = typeof payload.total === 'number' ? payload.total : null
-      setFlashcardMessage(
-        total !== null ? `Flashcards saved successfully. Your deck now has ${total} cards.` : 'Flashcards saved successfully.',
-      )
+      const created = typeof payload.created === 'number' ? payload.created : 0
+      setFlashcardToast(`${created} flashcards saved.`)
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unexpected error while creating flashcards.'
       setFlashcardMessage(message)
@@ -260,7 +268,7 @@ export function AnalyzePage() {
               >
                 {isConverting ? 'Creating...' : 'Create Flashcards'}
               </button>
-              {flashcardMessage ? <p className="mt-3 text-sm font-semibold text-[#8c2f11]">{flashcardMessage}</p> : null}
+              {flashcardMessage ? <p className="mt-3 text-sm font-semibold text-[#b42020]">{flashcardMessage}</p> : null}
             </div>
           </div>
 
@@ -314,6 +322,12 @@ export function AnalyzePage() {
               Continue as guest
             </button> */}
           </div>
+        </div>
+      ) : null}
+
+      {flashcardToast ? (
+        <div className="fixed bottom-4 right-4 z-50 rounded-lg bg-[#1b1714] px-4 py-3 text-sm font-semibold text-white shadow-xl">
+          {flashcardToast}
         </div>
       ) : null}
     </>

@@ -210,12 +210,68 @@ class MinerApiTests(TestCase):
             "/api/flashcards/create",
             data=json.dumps({
                 "words": [
-                    {"word": "你好", "pinyin": "ni3 hao3"},
-                    {"word": "世界", "pinyin": "shi4 jie4"},
+                    {"word": "你好", "pinyin": "ni3 hao3", "meaning": "hello"},
+                    {"word": "世界", "pinyin": "shi4 jie4", "meaning": "world"},
                 ]
             }),
             content_type="application/json",
         )
 
         self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["created"], 2)
         self.assertEqual(UserFlashcard.objects.filter(user=user).count(), 2)
+
+    def test_create_flashcards_saves_one_row_per_meaning(self):
+        user = User.objects.create_user(username="cathy", password="TopSecret123")
+        self.client.force_login(user)
+
+        response = self.client.post(
+            "/api/flashcards/create",
+            data=json.dumps(
+                {
+                    "words": [
+                        {
+                            "word": "东西",
+                            "pinyin": "dong1 xi",
+                            "meanings": ["thing", "east and west"],
+                        }
+                    ]
+                }
+            ),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["created"], 1)
+        self.assertEqual(UserFlashcard.objects.filter(user=user, word="东西").count(), 2)
+
+    def test_create_flashcards_does_not_duplicate_existing_word_meaning_rows(self):
+        user = User.objects.create_user(username="dora", password="TopSecret123")
+        self.client.force_login(user)
+
+        payload = {
+            "words": [
+                {
+                    "word": "东西",
+                    "pinyin": "dong1 xi",
+                    "meanings": ["thing", "east and west"],
+                }
+            ]
+        }
+
+        first = self.client.post(
+            "/api/flashcards/create",
+            data=json.dumps(payload),
+            content_type="application/json",
+        )
+        second = self.client.post(
+            "/api/flashcards/create",
+            data=json.dumps(payload),
+            content_type="application/json",
+        )
+
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(second.status_code, 200)
+        self.assertEqual(first.json()["created"], 1)
+        self.assertEqual(second.json()["created"], 0)
+        self.assertEqual(UserFlashcard.objects.filter(user=user, word="东西").count(), 2)
