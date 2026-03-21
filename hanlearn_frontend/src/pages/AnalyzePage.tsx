@@ -57,6 +57,7 @@ export function AnalyzePage() {
   const [isConverting, setIsConverting] = useState(false)
   const [flashcardMessage, setFlashcardMessage] = useState<string | null>(null)
   const [flashcardToast, setFlashcardToast] = useState<string | null>(null)
+  const [hasSavedFlashcards, setHasSavedFlashcards] = useState(false)
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
   const flashcardWords = useMemo(
     () => (analysis?.words ?? []).filter((row) => !row.is_known).map((row) => ({ word: row.word, pinyin: row.pinyin })),
@@ -111,6 +112,10 @@ export function AnalyzePage() {
     const timeoutId = window.setTimeout(() => setFlashcardToast(null), 3200)
     return () => window.clearTimeout(timeoutId)
   }, [flashcardToast])
+
+  useEffect(() => {
+    setHasSavedFlashcards(false)
+  }, [analysis?.cleaned_text])
 
   if (!analysis) {
     return (
@@ -181,6 +186,7 @@ export function AnalyzePage() {
       }
 
       const created = typeof payload.created === 'number' ? payload.created : 0
+      setHasSavedFlashcards(true)
       setFlashcardToast(`${created} flashcards saved.`)
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unexpected error while creating flashcards.'
@@ -262,11 +268,11 @@ export function AnalyzePage() {
             <div className="mt-5 border-t border-[#efe3d4] pt-4">
               <button
                 type="button"
-                onClick={handleConvertToFlashcards}
-                disabled={isConverting || !flashcardWords.length}
+                onClick={hasSavedFlashcards ? () => navigate('/review') : handleConvertToFlashcards}
+                disabled={isConverting || (!flashcardWords.length && !hasSavedFlashcards)}
                 className="ml-auto block rounded-xl bg-[#d1451b] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#b63e19] disabled:cursor-not-allowed disabled:opacity-70"
               >
-                {isConverting ? 'Creating...' : 'Create Flashcards'}
+                {isConverting ? 'Creating...' : hasSavedFlashcards ? 'Review Flashcards' : 'Create Flashcards'}
               </button>
               {flashcardMessage ? <p className="mt-3 text-sm font-semibold text-[#b42020]">{flashcardMessage}</p> : null}
             </div>
