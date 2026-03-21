@@ -242,3 +242,17 @@ def create_flashcards_view(request: HttpRequest) -> JsonResponse:
     total = UserFlashcard.objects.filter(user=request.user).count()
     created_words = len({word for word, _ in new_pairs})
     return JsonResponse({"created": created_words, "total": total})
+
+
+@require_GET
+def flashcards_view(request: HttpRequest) -> JsonResponse:
+    if not request.user.is_authenticated:
+        return JsonResponse({"error": "Create an account or sign in to view flashcards."}, status=401)
+
+    rows = list(
+        UserFlashcard.objects.filter(user=request.user)
+        .order_by("-created_at", "-id")
+        .values("id", "word", "pinyin", "created_at", "meaning")
+    )
+
+    return JsonResponse({"flashcards": rows})

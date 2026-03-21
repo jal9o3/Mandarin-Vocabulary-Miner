@@ -1,22 +1,155 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? ''
 
 type FlashcardData = {
   id: number
   word: string
-  pronunciation: string
+  pinyin: string
   meaning: string
+  created_at: string
 }
 
-const PLACEHOLDER_CARDS: FlashcardData[] = []
+type FlashcardRow = {
+  id: unknown
+  word: unknown
+  pinyin: unknown
+  meaning: unknown
+  created_at: unknown
+}
 
 export function FlashcardReviewPage() {
+  const [cards, setCards] = useState<FlashcardData[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [currentIndex, setCurrentIndex] = useState(0)
   const [isFlipped, setIsFlipped] = useState(false)
+  const [isComplete, setIsComplete] = useState(false)
 
-  const cards = PLACEHOLDER_CARDS
   const hasCards = cards.length > 0
   const currentCard = hasCards ? cards[currentIndex] : null
   const totalCards = cards.length
+
+  useEffect(() => {
+    const loadFlashcards = async () => {
+      setIsLoading(true)
+      setErrorMessage(null)
+
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/flashcards`, {
+          method: 'GET',
+          credentials: 'include',
+        })
+
+        const payload = (await response.json()) as {
+          error?: unknown
+          flashcards?: FlashcardRow[]
+        }
+
+        if (!response.ok) {
+          const error = typeof payload.error === 'string' ? payload.error : 'Failed to load flashcards.'
+          throw new Error(error)
+        }
+
+        const validRows: Array<{
+          id: number
+          word: string
+          pinyin: string
+          meaning: string
+          created_at: string
+        }> = []
+
+        for (const row of payload.flashcards ?? []) {
+          if (typeof row.id !== 'number') continue
+          if (typeof row.word !== 'string') continue
+          if (typeof row.meaning !== 'string') continue
+          if (typeof row.pinyin !== 'string') continue
+          if (typeof row.created_at !== 'string') continue
+          validRows.push({
+            id: row.id,
+            word: row.word.trim(),
+            pinyin: row.pinyin,
+            meaning: row.meaning,
+            created_at: row.created_at,
+          })
+        }
+
+        const grouped = new Map<
+          string,
+          {
+            id: number
+            word: string
+            pinyin: string
+            created_at: string
+            meanings: string[]
+            meaningSet: Set<string>
+          }
+        >()
+
+        for (const row of validRows) {
+          const meaningParts = row.meaning
+            .split(';')
+            .map((part) => part.trim())
+            .filter((part) => part.length > 0)
+
+          const existing = grouped.get(row.word)
+          if (!existing) {
+            grouped.set(row.word, {
+              id: row.id,
+              word: row.word,
+              pinyin: row.pinyin,
+              created_at: row.created_at,
+              meanings: [...meaningParts],
+              meaningSet: new Set(meaningParts),
+            })
+            continue
+          }
+
+          if (!existing.pinyin && row.pinyin) {
+            existing.pinyin = row.pinyin
+          }
+
+          for (const part of meaningParts) {
+            if (existing.meaningSet.has(part)) {
+              continue
+            }
+            existing.meanings.push(part)
+            existing.meaningSet.add(part)
+          }
+
+          if (new Date(row.created_at).getTime() > new Date(existing.created_at).getTime()) {
+            existing.id = row.id
+            existing.created_at = row.created_at
+          }
+        }
+
+        const nextCards: FlashcardData[] = Array.from(grouped.values()).map((entry) => {
+          const combinedMeaning = entry.meanings.length ? entry.meanings.join('; ') : 'No meaning available.'
+          return {
+            id: entry.id,
+            word: entry.word,
+            pinyin: entry.pinyin,
+            created_at: entry.created_at,
+            meaning: combinedMeaning,
+          }
+        })
+
+        nextCards.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+
+        setCards(nextCards)
+        setCurrentIndex(0)
+        setIsFlipped(false)
+        setIsComplete(false)
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unexpected error while loading flashcards.'
+        setErrorMessage(message)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    void loadFlashcards()
+  }, [])
 
   const handleRevealWord = () => {
     setIsFlipped(true)
@@ -30,8 +163,7 @@ export function FlashcardReviewPage() {
     if (currentIndex < totalCards - 1) {
       setCurrentIndex(currentIndex + 1)
     } else {
-      // Deck complete - could show completion screen
-      console.log('Deck complete!')
+      setIsComplete(true)
     }
   }
 
@@ -42,13 +174,42 @@ export function FlashcardReviewPage() {
       <div className="pointer-events-none absolute -right-16 top-80 h-72 w-72 rounded-full bg-[#d1451b]/10 blur-3xl" />
 
       <main className="mx-auto min-h-screen w-full max-w-2xl px-6 py-10 sm:px-10 lg:px-12">
-        {!hasCards ? (
+        {isLoading ? (
+          <div className="flex items-center justify-center h-96">
+            <div className="text-center">
+              <p className="text-xl font-semibold text-[#75695f]">Loading flashcards...</p>
+            </div>
+          </div>
+        ) : errorMessage ? (
+          <div className="flex items-center justify-center h-96">
+            <div className="text-center max-w-md">
+              <p className="text-xl font-semibold text-[#8c2f11]">{errorMessage}</p>
+            </div>
+          </div>
+        ) : !hasCards ? (
           // Empty state
           <div className="flex items-center justify-center h-96">
             <div className="text-center">
               <p className="text-xl font-semibold text-[#75695f]">
                 Extract words in the miner to create flashcards.
               </p>
+            </div>
+          </div>
+        ) : isComplete ? (
+          <div className="flex items-center justify-center h-96">
+            <div className="text-center">
+              <p className="text-3xl font-bold text-[#1b1714]">Deck complete</p>
+              <p className="mt-3 text-[#75695f]">You reviewed all saved flashcards.</p>
+              <button
+                onClick={() => {
+                  setCurrentIndex(0)
+                  setIsFlipped(false)
+                  setIsComplete(false)
+                }}
+                className="mt-6 px-6 py-3 rounded-xl bg-[#d1451b] text-white font-semibold transition hover:bg-[#b63e19]"
+              >
+                Start over
+              </button>
             </div>
           </div>
         ) : (
@@ -82,7 +243,7 @@ export function FlashcardReviewPage() {
                       <p className="mono text-xs uppercase tracking-[0.2em] text-[#8a7a6a] mb-4">
                         Meaning
                       </p>
-                      <p className="text-5xl font-bold text-[#1b1714] leading-tight mb-8">
+                      <p className="mb-8 max-h-48 overflow-y-auto px-2 text-base font-semibold leading-relaxed text-[#1b1714] sm:text-lg break-words">
                         {currentCard?.meaning}
                       </p>
                       <button
@@ -106,7 +267,7 @@ export function FlashcardReviewPage() {
                         {currentCard?.word}
                       </p>
                       <p className="text-2xl text-[#5e5349] font-medium mb-6">
-                        {currentCard?.pronunciation}
+                        {currentCard?.pinyin}
                       </p>
 
                       <div className="h-px bg-[#e6d5c3] my-6" />
@@ -114,7 +275,7 @@ export function FlashcardReviewPage() {
                       <p className="mono text-xs uppercase tracking-[0.2em] text-[#8a7a6a] mb-2">
                         Meaning
                       </p>
-                      <p className="text-xl text-[#4c423a] font-semibold mb-8">
+                      <p className="mb-8 max-h-36 overflow-y-auto px-2 text-sm font-medium leading-relaxed text-[#4c423a] sm:text-base break-words">
                         {currentCard?.meaning}
                       </p>
                     </div>
