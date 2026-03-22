@@ -352,7 +352,8 @@ class MinerApiTests(TestCase):
         self.assertEqual(flashcard.lapse_count, 1)
         self.assertEqual(flashcard.review_count, 1)
         self.assertLess(flashcard.ease_factor, 2.5)
-        self.assertGreaterEqual(flashcard.due_at, before_review + timedelta(minutes=9))
+        self.assertGreaterEqual(flashcard.due_at, before_review)
+        self.assertLessEqual(flashcard.due_at, before_review + timedelta(seconds=5))
 
     def test_review_flashcard_good_graduates_new_card(self):
         user = User.objects.create_user(username="grace", password="TopSecret123")

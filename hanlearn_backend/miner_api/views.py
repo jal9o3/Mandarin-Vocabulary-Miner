@@ -72,7 +72,8 @@ def _apply_sm2_review(flashcard: UserFlashcard, rating: str) -> None:
         flashcard.interval_days = 0
         flashcard.consecutive_correct_reviews = 0
         flashcard.lapse_count += 1
-        flashcard.due_at = now + timedelta(minutes=10)
+        # Requeue immediately so failed cards are seen again in the same session.
+        flashcard.due_at = now
     else:
         next_streak = current_streak + 1
         ease_factor = current_ease

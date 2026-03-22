@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? ''
 
@@ -72,77 +72,78 @@ export function FlashcardReviewPage() {
   const reviewedCards = Math.max(0, initialDueCount - remainingCards)
   const progressWidth = initialDueCount > 0 ? (reviewedCards / initialDueCount) * 100 : 0
 
-  useEffect(() => {
-    const loadFlashcards = async () => {
-      setIsLoading(true)
-      setErrorMessage(null)
+  const loadFlashcards = useCallback(async (showCompletionOnEmpty = false) => {
+    setIsLoading(true)
+    setErrorMessage(null)
 
-      try {
-        const searchParams = new URLSearchParams({ due_only: '1' })
+    try {
+      const searchParams = new URLSearchParams({ due_only: '1' })
 
-        const response = await fetch(buildApiUrl('/api/flashcards', searchParams), {
-          method: 'GET',
-          credentials: 'include',
-          headers: {
-            Accept: 'application/json',
-          },
-        })
+      const response = await fetch(buildApiUrl('/api/flashcards', searchParams), {
+        method: 'GET',
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+        },
+      })
 
-        const payload = await parseApiJson<{
-          error?: unknown
-          flashcards?: FlashcardRow[]
-          total?: unknown
-          due?: unknown
-        }>(response)
+      const payload = await parseApiJson<{
+        error?: unknown
+        flashcards?: FlashcardRow[]
+        total?: unknown
+        due?: unknown
+      }>(response)
 
-        if (!response.ok) {
-          const error = typeof payload.error === 'string' ? payload.error : 'Failed to load flashcards.'
-          throw new Error(error)
-        }
-
-        const validRows: FlashcardData[] = []
-
-        for (const row of payload.flashcards ?? []) {
-          if (typeof row.id !== 'number') continue
-          if (typeof row.word !== 'string') continue
-          if (typeof row.meaning !== 'string') continue
-          if (typeof row.pinyin !== 'string') continue
-          if (typeof row.created_at !== 'string') continue
-          if (typeof row.due_at !== 'string') continue
-          validRows.push({
-            id: row.id,
-            word: row.word.trim(),
-            pinyin: row.pinyin,
-            meaning: row.meaning,
-            created_at: row.created_at,
-            due_at: row.due_at,
-            last_reviewed_at: typeof row.last_reviewed_at === 'string' ? row.last_reviewed_at : null,
-            interval_days: typeof row.interval_days === 'number' ? row.interval_days : 0,
-            ease_factor: typeof row.ease_factor === 'number' ? row.ease_factor : 2.5,
-            consecutive_correct_reviews:
-              typeof row.consecutive_correct_reviews === 'number' ? row.consecutive_correct_reviews : 0,
-            review_count: typeof row.review_count === 'number' ? row.review_count : 0,
-            lapse_count: typeof row.lapse_count === 'number' ? row.lapse_count : 0,
-          })
-        }
-
-        validRows.sort((a, b) => new Date(a.due_at).getTime() - new Date(b.due_at).getTime())
-
-        setCards(validRows)
-        setInitialDueCount(typeof payload.due === 'number' ? payload.due : validRows.length)
-        setTotalFlashcards(typeof payload.total === 'number' ? payload.total : validRows.length)
-        setIsFlipped(false)
-        setIsComplete(false)
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'Unexpected error while loading flashcards.'
-        setErrorMessage(message)
-      } finally {
-        setIsLoading(false)
+      if (!response.ok) {
+        const error = typeof payload.error === 'string' ? payload.error : 'Failed to load flashcards.'
+        throw new Error(error)
       }
-    }
 
-    void loadFlashcards()
+      const validRows: FlashcardData[] = []
+
+      for (const row of payload.flashcards ?? []) {
+        if (typeof row.id !== 'number') continue
+        if (typeof row.word !== 'string') continue
+        if (typeof row.meaning !== 'string') continue
+        if (typeof row.pinyin !== 'string') continue
+        if (typeof row.created_at !== 'string') continue
+        if (typeof row.due_at !== 'string') continue
+        validRows.push({
+          id: row.id,
+          word: row.word.trim(),
+          pinyin: row.pinyin,
+          meaning: row.meaning,
+          created_at: row.created_at,
+          due_at: row.due_at,
+          last_reviewed_at: typeof row.last_reviewed_at === 'string' ? row.last_reviewed_at : null,
+          interval_days: typeof row.interval_days === 'number' ? row.interval_days : 0,
+          ease_factor: typeof row.ease_factor === 'number' ? row.ease_factor : 2.5,
+          consecutive_correct_reviews:
+            typeof row.consecutive_correct_reviews === 'number' ? row.consecutive_correct_reviews : 0,
+          review_count: typeof row.review_count === 'number' ? row.review_count : 0,
+          lapse_count: typeof row.lapse_count === 'number' ? row.lapse_count : 0,
+        })
+      }
+
+      validRows.sort((a, b) => new Date(a.due_at).getTime() - new Date(b.due_at).getTime())
+
+      const dueCount = typeof payload.due === 'number' ? payload.due : validRows.length
+      setCards(validRows)
+      setInitialDueCount(dueCount)
+      setTotalFlashcards(typeof payload.total === 'number' ? payload.total : validRows.length)
+      setIsFlipped(false)
+      setIsComplete(showCompletionOnEmpty && dueCount === 0)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unexpected error while loading flashcards.'
+      setErrorMessage(message)
+    } finally {
+      setIsLoading(false)
+    }
   }, [])
+
+  useEffect(() => {
+    void loadFlashcards()
+  }, [loadFlashcards])
 
   const handleRevealWord = () => {
     setIsFlipped(true)
@@ -171,9 +172,7 @@ export function FlashcardReviewPage() {
         throw new Error(error)
       }
 
-      setCards((previousCards) => previousCards.filter((card) => card.id !== currentCard.id))
-      setIsFlipped(false)
-      setIsComplete(remainingCards === 1)
+      await loadFlashcards(true)
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unexpected error while saving review.'
       setErrorMessage(message)
