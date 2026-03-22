@@ -3,11 +3,12 @@ import json
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.models import User
 from django.conf import settings
+from django.db import transaction
 from django.http import HttpRequest, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_http_methods
 
-from .models import UserFlashcard
+from .models import UserFlashcard, Word
 from .services import analyze_text, build_vocab_screen, load_vocab, parse_vocab_text, resolve_word_flashcard_info, save_vocab
 
 
@@ -179,6 +180,7 @@ def create_flashcards_view(request: HttpRequest) -> JsonResponse:
         return JsonResponse({"error": "Provide 'words' as a list."}, status=400)
 
     pending_entries: dict[tuple[str, str], str] = {}
+    pinyin_by_word: dict[str, str] = {}
     for item in words_payload:
         word = ""
         pinyin_value = ""
@@ -211,6 +213,9 @@ def create_flashcards_view(request: HttpRequest) -> JsonResponse:
                 if isinstance(resolved_meanings, list):
                     meanings = [meaning.strip() for meaning in resolved_meanings if isinstance(meaning, str) and meaning.strip()]
 
+        if pinyin_value and word not in pinyin_by_word:
+            pinyin_by_word[word] = pinyin_value
+
         meaning_rows = meanings or [""]
         for meaning in meaning_rows:
             key = (word, meaning)
@@ -224,21 +229,45 @@ def create_flashcards_view(request: HttpRequest) -> JsonResponse:
 
     candidate_words = {word for word, _ in pending_entries.keys()}
     candidate_meanings = {meaning for _, meaning in pending_entries.keys()}
-    existing_pairs = set(
-        UserFlashcard.objects.filter(
-            user=request.user,
-            word__in=candidate_words,
-            meaning__in=candidate_meanings,
-        ).values_list("word", "meaning")
-    )
 
-    new_pairs = set(pending_entries.keys()) - existing_pairs
-    flashcards_to_create = [
-        UserFlashcard(user=request.user, word=word, pinyin=pending_entries[(word, meaning)], meaning=meaning)
-        for word, meaning in pending_entries.keys()
-    ]
+    with transaction.atomic():
+        existing_words = {entry.text: entry for entry in Word.objects.filter(text__in=candidate_words)}
+        words_to_create = [
+            Word(text=word, pinyin=pinyin_by_word.get(word, ""))
+            for word in candidate_words
+            if word not in existing_words
+        ]
+        if words_to_create:
+            Word.objects.bulk_create(words_to_create, ignore_conflicts=True)
+            existing_words = {entry.text: entry for entry in Word.objects.filter(text__in=candidate_words)}
 
-    UserFlashcard.objects.bulk_create(flashcards_to_create, ignore_conflicts=True)
+        words_to_update: list[Word] = []
+        for word, pinyin_value in pinyin_by_word.items():
+            entry = existing_words.get(word)
+            if entry is None or entry.pinyin or not pinyin_value:
+                continue
+            entry.pinyin = pinyin_value
+            words_to_update.append(entry)
+
+        if words_to_update:
+            Word.objects.bulk_update(words_to_update, ["pinyin"])
+
+        existing_pairs = set(
+            UserFlashcard.objects.filter(
+                user=request.user,
+                word__text__in=candidate_words,
+                meaning__in=candidate_meanings,
+            ).values_list("word__text", "meaning")
+        )
+
+        new_pairs = set(pending_entries.keys()) - existing_pairs
+        flashcards_to_create = [
+            UserFlashcard(user=request.user, word=existing_words[word], meaning=meaning)
+            for word, meaning in pending_entries.keys()
+        ]
+
+        UserFlashcard.objects.bulk_create(flashcards_to_create, ignore_conflicts=True)
+
     total = UserFlashcard.objects.filter(user=request.user).count()
     created_words = len({word for word, _ in new_pairs})
     return JsonResponse({"created": created_words, "total": total})
@@ -249,10 +278,15 @@ def flashcards_view(request: HttpRequest) -> JsonResponse:
     if not request.user.is_authenticated:
         return JsonResponse({"error": "Create an account or sign in to view flashcards."}, status=401)
 
-    rows = list(
-        UserFlashcard.objects.filter(user=request.user)
-        .order_by("-created_at", "-id")
-        .values("id", "word", "pinyin", "created_at", "meaning")
-    )
+    rows = [
+        {
+            "id": flashcard.id,
+            "word": flashcard.word.text,
+            "pinyin": flashcard.word.pinyin,
+            "created_at": flashcard.created_at,
+            "meaning": flashcard.meaning,
+        }
+        for flashcard in UserFlashcard.objects.filter(user=request.user).select_related("word").order_by("-created_at", "-id")
+    ]
 
     return JsonResponse({"flashcards": rows})

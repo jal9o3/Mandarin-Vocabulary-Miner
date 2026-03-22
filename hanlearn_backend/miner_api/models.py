@@ -2,10 +2,17 @@ from django.conf import settings
 from django.db import models
 
 
+class Word(models.Model):
+    text = models.CharField(max_length=64, unique=True)
+    pinyin = models.CharField(max_length=128, blank=True)
+
+    def __str__(self) -> str:
+        return str(self.text)
+
+
 class UserFlashcard(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="flashcards")
-    word = models.CharField(max_length=64)
-    pinyin = models.CharField(max_length=128, blank=True)
+    word = models.ForeignKey(Word, on_delete=models.CASCADE, related_name="flashcards")
     meaning = models.CharField(max_length=512, blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
 

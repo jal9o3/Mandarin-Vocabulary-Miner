@@ -7,7 +7,7 @@ from django.contrib.auth.models import User
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 
-from miner_api.models import UserFlashcard
+from miner_api.models import UserFlashcard, Word
 
 
 class MinerApiTests(TestCase):
@@ -220,6 +220,7 @@ class MinerApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["created"], 2)
         self.assertEqual(UserFlashcard.objects.filter(user=user).count(), 2)
+        self.assertEqual(Word.objects.count(), 2)
 
     def test_create_flashcards_saves_one_row_per_meaning(self):
         user = User.objects.create_user(username="cathy", password="TopSecret123")
@@ -243,7 +244,10 @@ class MinerApiTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["created"], 1)
-        self.assertEqual(UserFlashcard.objects.filter(user=user, word="东西").count(), 2)
+        self.assertEqual(UserFlashcard.objects.filter(user=user, word__text="东西").count(), 2)
+        self.assertEqual(Word.objects.filter(text="东西").count(), 1)
+        word_ids = list(UserFlashcard.objects.filter(user=user, word__text="东西").values_list("word_id", flat=True))
+        self.assertEqual(len(set(word_ids)), 1)
 
     def test_create_flashcards_does_not_duplicate_existing_word_meaning_rows(self):
         user = User.objects.create_user(username="dora", password="TopSecret123")
@@ -274,4 +278,5 @@ class MinerApiTests(TestCase):
         self.assertEqual(second.status_code, 200)
         self.assertEqual(first.json()["created"], 1)
         self.assertEqual(second.json()["created"], 0)
-        self.assertEqual(UserFlashcard.objects.filter(user=user, word="东西").count(), 2)
+        self.assertEqual(UserFlashcard.objects.filter(user=user, word__text="东西").count(), 2)
+        self.assertEqual(Word.objects.filter(text="东西").count(), 1)
