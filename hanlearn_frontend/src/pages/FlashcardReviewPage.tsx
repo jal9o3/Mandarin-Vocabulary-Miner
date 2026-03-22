@@ -2,12 +2,43 @@ import { useEffect, useState } from 'react'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? ''
 
+const buildApiUrl = (path: string, searchParams?: URLSearchParams) => {
+  const base = API_BASE_URL.replace(/\/$/, '')
+  const url = `${base}${path}`
+  const query = searchParams?.toString()
+  return query ? `${url}?${query}` : url
+}
+
+const parseApiJson = async <T,>(response: Response): Promise<T> => {
+  const contentType = response.headers.get('content-type') ?? ''
+  if (!contentType.includes('application/json')) {
+    const body = await response.text()
+    const preview = body.replace(/\s+/g, ' ').trim().slice(0, 120)
+    if (preview.startsWith('<!DOCTYPE') || preview.startsWith('<html')) {
+      throw new Error('API returned HTML instead of JSON. Check that the Django server is running and that /api is reaching it.')
+    }
+
+    throw new Error(preview || `Unexpected API response (${response.status}).`)
+  }
+
+  return (await response.json()) as T
+}
+
+type Rating = 'again' | 'hard' | 'good' | 'easy'
+
 type FlashcardData = {
   id: number
   word: string
   pinyin: string
   meaning: string
   created_at: string
+  due_at: string
+  last_reviewed_at: string | null
+  interval_days: number
+  ease_factor: number
+  consecutive_correct_reviews: number
+  review_count: number
+  lapse_count: number
 }
 
 type FlashcardRow = {
@@ -16,19 +47,30 @@ type FlashcardRow = {
   pinyin: unknown
   meaning: unknown
   created_at: unknown
+  due_at: unknown
+  last_reviewed_at?: unknown
+  interval_days?: unknown
+  ease_factor?: unknown
+  consecutive_correct_reviews?: unknown
+  review_count?: unknown
+  lapse_count?: unknown
 }
 
 export function FlashcardReviewPage() {
   const [cards, setCards] = useState<FlashcardData[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [isSubmittingReview, setIsSubmittingReview] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
-  const [currentIndex, setCurrentIndex] = useState(0)
   const [isFlipped, setIsFlipped] = useState(false)
   const [isComplete, setIsComplete] = useState(false)
+  const [initialDueCount, setInitialDueCount] = useState(0)
+  const [totalFlashcards, setTotalFlashcards] = useState(0)
 
   const hasCards = cards.length > 0
-  const currentCard = hasCards ? cards[currentIndex] : null
-  const totalCards = cards.length
+  const currentCard = hasCards ? cards[0] : null
+  const remainingCards = cards.length
+  const reviewedCards = Math.max(0, initialDueCount - remainingCards)
+  const progressWidth = initialDueCount > 0 ? (reviewedCards / initialDueCount) * 100 : 0
 
   useEffect(() => {
     const loadFlashcards = async () => {
@@ -36,28 +78,29 @@ export function FlashcardReviewPage() {
       setErrorMessage(null)
 
       try {
-        const response = await fetch(`${API_BASE_URL}/api/flashcards`, {
+        const searchParams = new URLSearchParams({ due_only: '1' })
+
+        const response = await fetch(buildApiUrl('/api/flashcards', searchParams), {
           method: 'GET',
           credentials: 'include',
+          headers: {
+            Accept: 'application/json',
+          },
         })
 
-        const payload = (await response.json()) as {
+        const payload = await parseApiJson<{
           error?: unknown
           flashcards?: FlashcardRow[]
-        }
+          total?: unknown
+          due?: unknown
+        }>(response)
 
         if (!response.ok) {
           const error = typeof payload.error === 'string' ? payload.error : 'Failed to load flashcards.'
           throw new Error(error)
         }
 
-        const validRows: Array<{
-          id: number
-          word: string
-          pinyin: string
-          meaning: string
-          created_at: string
-        }> = []
+        const validRows: FlashcardData[] = []
 
         for (const row of payload.flashcards ?? []) {
           if (typeof row.id !== 'number') continue
@@ -65,79 +108,29 @@ export function FlashcardReviewPage() {
           if (typeof row.meaning !== 'string') continue
           if (typeof row.pinyin !== 'string') continue
           if (typeof row.created_at !== 'string') continue
+          if (typeof row.due_at !== 'string') continue
           validRows.push({
             id: row.id,
             word: row.word.trim(),
             pinyin: row.pinyin,
             meaning: row.meaning,
             created_at: row.created_at,
+            due_at: row.due_at,
+            last_reviewed_at: typeof row.last_reviewed_at === 'string' ? row.last_reviewed_at : null,
+            interval_days: typeof row.interval_days === 'number' ? row.interval_days : 0,
+            ease_factor: typeof row.ease_factor === 'number' ? row.ease_factor : 2.5,
+            consecutive_correct_reviews:
+              typeof row.consecutive_correct_reviews === 'number' ? row.consecutive_correct_reviews : 0,
+            review_count: typeof row.review_count === 'number' ? row.review_count : 0,
+            lapse_count: typeof row.lapse_count === 'number' ? row.lapse_count : 0,
           })
         }
 
-        const grouped = new Map<
-          string,
-          {
-            id: number
-            word: string
-            pinyin: string
-            created_at: string
-            meanings: string[]
-            meaningSet: Set<string>
-          }
-        >()
+        validRows.sort((a, b) => new Date(a.due_at).getTime() - new Date(b.due_at).getTime())
 
-        for (const row of validRows) {
-          const meaningParts = row.meaning
-            .split(';')
-            .map((part) => part.trim())
-            .filter((part) => part.length > 0)
-
-          const existing = grouped.get(row.word)
-          if (!existing) {
-            grouped.set(row.word, {
-              id: row.id,
-              word: row.word,
-              pinyin: row.pinyin,
-              created_at: row.created_at,
-              meanings: [...meaningParts],
-              meaningSet: new Set(meaningParts),
-            })
-            continue
-          }
-
-          if (!existing.pinyin && row.pinyin) {
-            existing.pinyin = row.pinyin
-          }
-
-          for (const part of meaningParts) {
-            if (existing.meaningSet.has(part)) {
-              continue
-            }
-            existing.meanings.push(part)
-            existing.meaningSet.add(part)
-          }
-
-          if (new Date(row.created_at).getTime() > new Date(existing.created_at).getTime()) {
-            existing.id = row.id
-            existing.created_at = row.created_at
-          }
-        }
-
-        const nextCards: FlashcardData[] = Array.from(grouped.values()).map((entry) => {
-          const combinedMeaning = entry.meanings.length ? entry.meanings.join('; ') : 'No meaning available.'
-          return {
-            id: entry.id,
-            word: entry.word,
-            pinyin: entry.pinyin,
-            created_at: entry.created_at,
-            meaning: combinedMeaning,
-          }
-        })
-
-        nextCards.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-
-        setCards(nextCards)
-        setCurrentIndex(0)
+        setCards(validRows)
+        setInitialDueCount(typeof payload.due === 'number' ? payload.due : validRows.length)
+        setTotalFlashcards(typeof payload.total === 'number' ? payload.total : validRows.length)
         setIsFlipped(false)
         setIsComplete(false)
       } catch (error) {
@@ -155,15 +148,37 @@ export function FlashcardReviewPage() {
     setIsFlipped(true)
   }
 
-  const handleRating = (rating: 'again' | 'hard' | 'good' | 'easy') => {
+  const handleRating = async (rating: Rating) => {
     if (!currentCard) return
-    console.log(`Rated card ${currentCard.id} as: ${rating}`)
-    // Reset card and move to next
-    setIsFlipped(false)
-    if (currentIndex < totalCards - 1) {
-      setCurrentIndex(currentIndex + 1)
-    } else {
-      setIsComplete(true)
+
+    setIsSubmittingReview(true)
+    setErrorMessage(null)
+
+    try {
+      const response = await fetch(buildApiUrl(`/api/flashcards/${currentCard.id}/review`), {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify({ rating }),
+      })
+
+      const payload = await parseApiJson<{ error?: unknown }>(response)
+      if (!response.ok) {
+        const error = typeof payload.error === 'string' ? payload.error : 'Failed to save review.'
+        throw new Error(error)
+      }
+
+      setCards((previousCards) => previousCards.filter((card) => card.id !== currentCard.id))
+      setIsFlipped(false)
+      setIsComplete(remainingCards === 1)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unexpected error while saving review.'
+      setErrorMessage(message)
+    } finally {
+      setIsSubmittingReview(false)
     }
   }
 
@@ -186,30 +201,30 @@ export function FlashcardReviewPage() {
               <p className="text-xl font-semibold text-[#8c2f11]">{errorMessage}</p>
             </div>
           </div>
+        ) : isComplete ? (
+          <div className="flex items-center justify-center h-96">
+            <div className="text-center">
+              <p className="text-3xl font-bold text-[#1b1714]">Deck complete</p>
+              <p className="mt-3 text-[#75695f]">You reviewed every flashcard that was due.</p>
+              <button
+                onClick={() => {
+                  setIsFlipped(false)
+                  setIsComplete(false)
+                  void window.location.reload()
+                }}
+                className="mt-6 px-6 py-3 rounded-xl bg-[#d1451b] text-white font-semibold transition hover:bg-[#b63e19]"
+              >
+                Refresh due deck
+              </button>
+            </div>
+          </div>
         ) : !hasCards ? (
           // Empty state
           <div className="flex items-center justify-center h-96">
             <div className="text-center">
               <p className="text-xl font-semibold text-[#75695f]">
-                Extract words in the miner to create flashcards.
+                {totalFlashcards > 0 ? 'No flashcards are due right now.' : 'Extract words in the miner to create flashcards.'}
               </p>
-            </div>
-          </div>
-        ) : isComplete ? (
-          <div className="flex items-center justify-center h-96">
-            <div className="text-center">
-              <p className="text-3xl font-bold text-[#1b1714]">Deck complete</p>
-              <p className="mt-3 text-[#75695f]">You reviewed all saved flashcards.</p>
-              <button
-                onClick={() => {
-                  setCurrentIndex(0)
-                  setIsFlipped(false)
-                  setIsComplete(false)
-                }}
-                className="mt-6 px-6 py-3 rounded-xl bg-[#d1451b] text-white font-semibold transition hover:bg-[#b63e19]"
-              >
-                Start over
-              </button>
             </div>
           </div>
         ) : (
@@ -220,14 +235,14 @@ export function FlashcardReviewPage() {
               <div>
                 <h1 className="text-3xl font-bold text-[#1b1714]">Review Flashcards</h1>
                 <p className="mt-1 text-sm text-[#75695f]">
-                  Card {currentIndex + 1} of {totalCards}
+                  {remainingCards} due now out of {totalFlashcards} saved
                 </p>
               </div>
               <div className="text-right">
                 <div className="h-3 w-48 rounded-full bg-[#e6d5c3] overflow-hidden">
                   <div
                     className="h-full bg-[#d1451b] transition-all duration-300"
-                    style={{ width: `${((currentIndex + 1) / totalCards) * 100}%` }}
+                    style={{ width: `${progressWidth}%` }}
                   />
                 </div>
               </div>
@@ -270,6 +285,10 @@ export function FlashcardReviewPage() {
                         {currentCard?.pinyin}
                       </p>
 
+                      <p className="mb-2 text-sm font-medium text-[#8a7a6a]">
+                        Current interval: {currentCard?.interval_days ?? 0} day{currentCard?.interval_days === 1 ? '' : 's'}
+                      </p>
+
                       <div className="h-px bg-[#e6d5c3] my-6" />
 
                       <p className="mono text-xs uppercase tracking-[0.2em] text-[#8a7a6a] mb-2">
@@ -288,25 +307,29 @@ export function FlashcardReviewPage() {
             {isFlipped && (
               <div className="grid grid-cols-4 gap-3">
                 <button
-                  onClick={() => handleRating('again')}
+                  onClick={() => void handleRating('again')}
+                  disabled={isSubmittingReview}
                   className="py-3 px-4 rounded-lg bg-[#ff6b6b] text-white font-semibold text-sm transition hover:-translate-y-0.5 hover:bg-[#ff5252] shadow-lg shadow-[#ff6b6b]/20 active:translate-y-0"
                 >
                   Again
                 </button>
                 <button
-                  onClick={() => handleRating('hard')}
+                  onClick={() => void handleRating('hard')}
+                  disabled={isSubmittingReview}
                   className="py-3 px-4 rounded-lg bg-[#ffa94d] text-white font-semibold text-sm transition hover:-translate-y-0.5 hover:bg-[#ff922b] shadow-lg shadow-[#ffa94d]/20 active:translate-y-0"
                 >
                   Hard
                 </button>
                 <button
-                  onClick={() => handleRating('good')}
+                  onClick={() => void handleRating('good')}
+                  disabled={isSubmittingReview}
                   className="py-3 px-4 rounded-lg bg-[#74b446] text-white font-semibold text-sm transition hover:-translate-y-0.5 hover:bg-[#5a9838] shadow-lg shadow-[#74b446]/20 active:translate-y-0"
                 >
                   Good
                 </button>
                 <button
-                  onClick={() => handleRating('easy')}
+                  onClick={() => void handleRating('easy')}
+                  disabled={isSubmittingReview}
                   className="py-3 px-4 rounded-lg bg-[#15aabf] text-white font-semibold text-sm transition hover:-translate-y-0.5 hover:bg-[#1098ad] shadow-lg shadow-[#15aabf]/20 active:translate-y-0"
                 >
                   Easy

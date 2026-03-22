@@ -1,11 +1,13 @@
 import json
 import tempfile
+from datetime import timedelta
 from pathlib import Path
 from unittest.mock import patch
 
 from django.contrib.auth.models import User
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
+from django.utils import timezone
 
 from miner_api.models import UserFlashcard, Word
 
@@ -222,7 +224,7 @@ class MinerApiTests(TestCase):
         self.assertEqual(UserFlashcard.objects.filter(user=user).count(), 2)
         self.assertEqual(Word.objects.count(), 2)
 
-    def test_create_flashcards_saves_one_row_per_meaning(self):
+    def test_create_flashcards_saves_one_row_per_word(self):
         user = User.objects.create_user(username="cathy", password="TopSecret123")
         self.client.force_login(user)
 
@@ -244,12 +246,12 @@ class MinerApiTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["created"], 1)
-        self.assertEqual(UserFlashcard.objects.filter(user=user, word__text="东西").count(), 2)
+        self.assertEqual(UserFlashcard.objects.filter(user=user, word__text="东西").count(), 1)
         self.assertEqual(Word.objects.filter(text="东西").count(), 1)
-        word_ids = list(UserFlashcard.objects.filter(user=user, word__text="东西").values_list("word_id", flat=True))
-        self.assertEqual(len(set(word_ids)), 1)
+        flashcard = UserFlashcard.objects.get(user=user, word__text="东西")
+        self.assertEqual(flashcard.meaning, "thing; east and west")
 
-    def test_create_flashcards_does_not_duplicate_existing_word_meaning_rows(self):
+    def test_create_flashcards_does_not_duplicate_existing_word_rows(self):
         user = User.objects.create_user(username="dora", password="TopSecret123")
         self.client.force_login(user)
 
@@ -278,5 +280,104 @@ class MinerApiTests(TestCase):
         self.assertEqual(second.status_code, 200)
         self.assertEqual(first.json()["created"], 1)
         self.assertEqual(second.json()["created"], 0)
-        self.assertEqual(UserFlashcard.objects.filter(user=user, word__text="东西").count(), 2)
+        self.assertEqual(UserFlashcard.objects.filter(user=user, word__text="东西").count(), 1)
         self.assertEqual(Word.objects.filter(text="东西").count(), 1)
+
+    def test_create_flashcards_merges_new_meanings_into_existing_word(self):
+        user = User.objects.create_user(username="helen", password="TopSecret123")
+        self.client.force_login(user)
+
+        first = self.client.post(
+            "/api/flashcards/create",
+            data=json.dumps({"words": [{"word": "东西", "pinyin": "dong1 xi", "meaning": "thing"}]}),
+            content_type="application/json",
+        )
+        second = self.client.post(
+            "/api/flashcards/create",
+            data=json.dumps({"words": [{"word": "东西", "pinyin": "dong1 xi", "meaning": "east and west"}]}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(second.status_code, 200)
+        self.assertEqual(first.json()["created"], 1)
+        self.assertEqual(second.json()["created"], 0)
+        flashcard = UserFlashcard.objects.get(user=user, word__text="东西")
+        self.assertEqual(flashcard.meaning, "thing; east and west")
+
+    def test_flashcards_due_only_filters_future_cards(self):
+        user = User.objects.create_user(username="erin", password="TopSecret123")
+        self.client.force_login(user)
+
+        due_word = Word.objects.create(text="你好", pinyin="ni3 hao3")
+        later_word = Word.objects.create(text="再见", pinyin="zai4 jian4")
+        UserFlashcard.objects.create(user=user, word=due_word, meaning="hello", due_at=timezone.now() - timedelta(minutes=1))
+        UserFlashcard.objects.create(user=user, word=later_word, meaning="goodbye", due_at=timezone.now() + timedelta(days=1))
+
+        response = self.client.get("/api/flashcards?due_only=1")
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["due"], 1)
+        self.assertTrue(data["due_only"])
+        self.assertEqual(len(data["flashcards"]), 1)
+        self.assertEqual(data["flashcards"][0]["word"], "你好")
+
+    def test_review_flashcard_again_resets_card_to_learning(self):
+        user = User.objects.create_user(username="frank", password="TopSecret123")
+        self.client.force_login(user)
+
+        word = Word.objects.create(text="你好", pinyin="ni3 hao3")
+        flashcard = UserFlashcard.objects.create(
+            user=user,
+            word=word,
+            meaning="hello",
+            due_at=timezone.now() - timedelta(minutes=1),
+            interval_days=6,
+            ease_factor=2.5,
+            consecutive_correct_reviews=3,
+        )
+
+        before_review = timezone.now()
+        response = self.client.post(
+            f"/api/flashcards/{flashcard.id}/review",
+            data=json.dumps({"rating": "again"}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        flashcard.refresh_from_db()
+        self.assertEqual(flashcard.interval_days, 0)
+        self.assertEqual(flashcard.consecutive_correct_reviews, 0)
+        self.assertEqual(flashcard.lapse_count, 1)
+        self.assertEqual(flashcard.review_count, 1)
+        self.assertLess(flashcard.ease_factor, 2.5)
+        self.assertGreaterEqual(flashcard.due_at, before_review + timedelta(minutes=9))
+
+    def test_review_flashcard_good_graduates_new_card(self):
+        user = User.objects.create_user(username="grace", password="TopSecret123")
+        self.client.force_login(user)
+
+        word = Word.objects.create(text="学习", pinyin="xue2 xi2")
+        flashcard = UserFlashcard.objects.create(
+            user=user,
+            word=word,
+            meaning="study",
+            due_at=timezone.now() - timedelta(minutes=1),
+        )
+
+        before_review = timezone.now()
+        response = self.client.post(
+            f"/api/flashcards/{flashcard.id}/review",
+            data=json.dumps({"rating": "good"}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        flashcard.refresh_from_db()
+        self.assertEqual(flashcard.interval_days, 1)
+        self.assertEqual(flashcard.consecutive_correct_reviews, 1)
+        self.assertEqual(flashcard.review_count, 1)
+        self.assertEqual(flashcard.lapse_count, 0)
+        self.assertAlmostEqual(flashcard.ease_factor, 2.5)
+        self.assertGreaterEqual(flashcard.due_at, before_review + timedelta(hours=23))

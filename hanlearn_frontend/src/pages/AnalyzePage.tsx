@@ -59,9 +59,40 @@ export function AnalyzePage() {
   const [flashcardToast, setFlashcardToast] = useState<string | null>(null)
   const [hasSavedFlashcards, setHasSavedFlashcards] = useState(false)
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
-  const flashcardWords = useMemo(
-    () => (analysis?.words ?? []).filter((row) => !row.is_known).map((row) => ({ word: row.word, pinyin: row.pinyin })),
+  const priorityDrillSet = useMemo(
+    () =>
+      analysis?.priority_drill_set ??
+      analysis?.words
+        .filter((row) => !row.is_known)
+        .slice(0, 12)
+        .map((row) => ({
+          word: row.word,
+          info: null,
+        })) ??
+      [],
     [analysis],
+  )
+  const flashcardWords = useMemo(
+    () => {
+      const infoByWord = new Map(
+        priorityDrillSet.map((item) => [item.word, item.info] as const),
+      )
+
+      return (analysis?.words ?? []).filter((row) => !row.is_known).map((row) => {
+        const info = infoByWord.get(row.word)
+        const meanings = Array.isArray(info?.meanings)
+          ? info.meanings.map((meaning) => meaning.trim()).filter((meaning) => meaning.length > 0)
+          : []
+        const pronunciation = typeof info?.pronunciation === 'string' && info.pronunciation.trim().length > 0
+          ? info.pronunciation.trim()
+          : row.pinyin
+
+        return meanings.length > 0
+          ? { word: row.word, pinyin: pronunciation, meanings }
+          : { word: row.word, pinyin: pronunciation }
+      })
+    },
+    [analysis, priorityDrillSet],
   )
   const unknownWordSet = useMemo(() => new Set((analysis?.unknown_words ?? []).filter((word) => word.length > 0)), [analysis])
   const highlightedPassageParts = useMemo(() => {
@@ -139,11 +170,6 @@ export function AnalyzePage() {
   }
 
   const unknownCount = analysis.unknown_words.length
-  const priorityDrillSet =
-    analysis.priority_drill_set ?? analysis.words.filter((row) => !row.is_known).slice(0, 12).map((row) => ({
-      word: row.word,
-      info: null,
-    }))
   const handleBackToSelection = () => {
     if (!state?.selectionState?.screening) {
       navigate('/paste')

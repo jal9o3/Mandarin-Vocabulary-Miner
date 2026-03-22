@@ -1,10 +1,12 @@
 import json
+from datetime import timedelta
 
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.models import User
 from django.conf import settings
 from django.db import transaction
 from django.http import HttpRequest, JsonResponse
+from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_http_methods
 
@@ -13,6 +15,98 @@ from .services import analyze_text, build_vocab_screen, load_vocab, parse_vocab_
 
 
 VOCAB_FILE = settings.BASE_DIR / "vocab.txt"
+MINIMUM_EASE_FACTOR = 1.3
+
+
+def _split_meanings(meaning_text: str) -> list[str]:
+    parts = [part.strip() for part in meaning_text.split(";") if part.strip()]
+    deduped: list[str] = []
+    seen: set[str] = set()
+    for part in parts:
+        if part in seen:
+            continue
+        seen.add(part)
+        deduped.append(part)
+    return deduped
+
+
+def _merge_meanings(existing_meaning: str, incoming_meanings: list[str]) -> str:
+    merged = _split_meanings(existing_meaning)
+    seen = set(merged)
+
+    for meaning in incoming_meanings:
+        cleaned = meaning.strip()
+        if not cleaned or cleaned in seen:
+            continue
+        seen.add(cleaned)
+        merged.append(cleaned)
+
+    return "; ".join(merged)
+
+
+def _serialize_flashcard(flashcard: UserFlashcard) -> dict:
+    return {
+        "id": flashcard.id,
+        "word": flashcard.word.text,
+        "pinyin": flashcard.word.pinyin,
+        "created_at": flashcard.created_at,
+        "meaning": flashcard.meaning,
+        "due_at": flashcard.due_at,
+        "last_reviewed_at": flashcard.last_reviewed_at,
+        "interval_days": flashcard.interval_days,
+        "ease_factor": flashcard.ease_factor,
+        "consecutive_correct_reviews": flashcard.consecutive_correct_reviews,
+        "review_count": flashcard.review_count,
+        "lapse_count": flashcard.lapse_count,
+    }
+
+
+def _apply_sm2_review(flashcard: UserFlashcard, rating: str) -> None:
+    now = timezone.now()
+    current_interval = flashcard.interval_days
+    current_streak = flashcard.consecutive_correct_reviews
+    current_ease = max(MINIMUM_EASE_FACTOR, flashcard.ease_factor)
+
+    if rating == "again":
+        flashcard.ease_factor = max(MINIMUM_EASE_FACTOR, current_ease - 0.2)
+        flashcard.interval_days = 0
+        flashcard.consecutive_correct_reviews = 0
+        flashcard.lapse_count += 1
+        flashcard.due_at = now + timedelta(minutes=10)
+    else:
+        next_streak = current_streak + 1
+        ease_factor = current_ease
+
+        if rating == "hard":
+            ease_factor = max(MINIMUM_EASE_FACTOR, current_ease - 0.15)
+        elif rating == "easy":
+            ease_factor = current_ease + 0.15
+
+        if next_streak == 1:
+            interval_days = 1 if rating != "easy" else 3
+        elif next_streak == 2:
+            if rating == "hard":
+                interval_days = 2
+            elif rating == "easy":
+                interval_days = 6
+            else:
+                interval_days = 3
+        else:
+            multiplier = ease_factor
+            if rating == "hard":
+                multiplier *= 0.8
+            elif rating == "easy":
+                multiplier *= 1.3
+
+            interval_days = max(current_interval + 1, round(current_interval * multiplier))
+
+        flashcard.ease_factor = ease_factor
+        flashcard.interval_days = interval_days
+        flashcard.consecutive_correct_reviews = next_streak
+        flashcard.due_at = now + timedelta(days=interval_days)
+
+    flashcard.review_count += 1
+    flashcard.last_reviewed_at = now
 
 
 def _json_body(request: HttpRequest) -> dict:
@@ -32,7 +126,7 @@ def _string_field(payload: dict, key: str) -> str | None:
 
 
 @require_GET
-def vocab_view(request: HttpRequest) -> JsonResponse:
+def vocab_view(_request: HttpRequest) -> JsonResponse:
     vocab_text = load_vocab(VOCAB_FILE)
     return JsonResponse(
         {
@@ -179,7 +273,7 @@ def create_flashcards_view(request: HttpRequest) -> JsonResponse:
     if not isinstance(words_payload, list):
         return JsonResponse({"error": "Provide 'words' as a list."}, status=400)
 
-    pending_entries: dict[tuple[str, str], str] = {}
+    pending_meanings: dict[str, list[str]] = {}
     pinyin_by_word: dict[str, str] = {}
     for item in words_payload:
         word = ""
@@ -216,19 +310,17 @@ def create_flashcards_view(request: HttpRequest) -> JsonResponse:
         if pinyin_value and word not in pinyin_by_word:
             pinyin_by_word[word] = pinyin_value
 
-        meaning_rows = meanings or [""]
-        for meaning in meaning_rows:
-            key = (word, meaning)
-            # Keep first resolved pinyin for the (word, meaning) pair.
-            if key in pending_entries:
+        existing_meanings = pending_meanings.setdefault(word, [])
+        for meaning in meanings:
+            cleaned = meaning.strip()
+            if not cleaned or cleaned in existing_meanings:
                 continue
-            pending_entries[key] = pinyin_value
+            existing_meanings.append(cleaned)
 
-    if not pending_entries:
+    if not pending_meanings:
         return JsonResponse({"created": 0, "total": UserFlashcard.objects.filter(user=request.user).count()})
 
-    candidate_words = {word for word, _ in pending_entries.keys()}
-    candidate_meanings = {meaning for _, meaning in pending_entries.keys()}
+    candidate_words = set(pending_meanings.keys())
 
     with transaction.atomic():
         existing_words = {entry.text: entry for entry in Word.objects.filter(text__in=candidate_words)}
@@ -252,24 +344,37 @@ def create_flashcards_view(request: HttpRequest) -> JsonResponse:
         if words_to_update:
             Word.objects.bulk_update(words_to_update, ["pinyin"])
 
-        existing_pairs = set(
-            UserFlashcard.objects.filter(
-                user=request.user,
-                word__text__in=candidate_words,
-                meaning__in=candidate_meanings,
-            ).values_list("word__text", "meaning")
-        )
+        existing_flashcards = {
+            flashcard.word.text: flashcard
+            for flashcard in UserFlashcard.objects.filter(user=request.user, word__text__in=candidate_words).select_related("word")
+        }
 
-        new_pairs = set(pending_entries.keys()) - existing_pairs
+        created_words = 0
+        flashcards_to_update: list[UserFlashcard] = []
         flashcards_to_create = [
-            UserFlashcard(user=request.user, word=existing_words[word], meaning=meaning)
-            for word, meaning in pending_entries.keys()
+            UserFlashcard(
+                user=request.user,
+                word=existing_words[word],
+                meaning=_merge_meanings("", pending_meanings[word]),
+            )
+            for word in candidate_words
+            if word not in existing_flashcards
         ]
 
+        created_words = len(flashcards_to_create)
+
+        for word, flashcard in existing_flashcards.items():
+            merged_meaning = _merge_meanings(flashcard.meaning, pending_meanings.get(word, []))
+            if merged_meaning == flashcard.meaning:
+                continue
+            flashcard.meaning = merged_meaning
+            flashcards_to_update.append(flashcard)
+
         UserFlashcard.objects.bulk_create(flashcards_to_create, ignore_conflicts=True)
+        if flashcards_to_update:
+            UserFlashcard.objects.bulk_update(flashcards_to_update, ["meaning"])
 
     total = UserFlashcard.objects.filter(user=request.user).count()
-    created_words = len({word for word, _ in new_pairs})
     return JsonResponse({"created": created_words, "total": total})
 
 
@@ -278,15 +383,53 @@ def flashcards_view(request: HttpRequest) -> JsonResponse:
     if not request.user.is_authenticated:
         return JsonResponse({"error": "Create an account or sign in to view flashcards."}, status=401)
 
+    due_only = request.GET.get("due_only") in {"1", "true", "yes"}
+    queryset = UserFlashcard.objects.filter(user=request.user).select_related("word")
+    if due_only:
+        queryset = queryset.filter(due_at__lte=timezone.now()).order_by("due_at", "id")
+    else:
+        queryset = queryset.order_by("due_at", "-created_at", "-id")
+
     rows = [
-        {
-            "id": flashcard.id,
-            "word": flashcard.word.text,
-            "pinyin": flashcard.word.pinyin,
-            "created_at": flashcard.created_at,
-            "meaning": flashcard.meaning,
-        }
-        for flashcard in UserFlashcard.objects.filter(user=request.user).select_related("word").order_by("-created_at", "-id")
+        _serialize_flashcard(flashcard)
+        for flashcard in queryset
     ]
 
-    return JsonResponse({"flashcards": rows})
+    now = timezone.now()
+    total_count = UserFlashcard.objects.filter(user=request.user).count()
+    due_count = UserFlashcard.objects.filter(user=request.user, due_at__lte=now).count()
+
+    return JsonResponse({"flashcards": rows, "total": total_count, "due": due_count, "due_only": due_only})
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def review_flashcard_view(request: HttpRequest, flashcard_id: int) -> JsonResponse:
+    if not request.user.is_authenticated:
+        return JsonResponse({"error": "Create an account or sign in to review flashcards."}, status=401)
+
+    payload = _json_body(request)
+    rating = payload.get("rating")
+    if rating not in {"again", "hard", "good", "easy"}:
+        return JsonResponse({"error": "Provide 'rating' as one of: again, hard, good, easy."}, status=400)
+
+    try:
+        flashcard = UserFlashcard.objects.select_related("word").get(id=flashcard_id, user=request.user)
+    except UserFlashcard.DoesNotExist:
+        return JsonResponse({"error": "Flashcard not found."}, status=404)
+
+    _apply_sm2_review(flashcard, rating)
+    flashcard.save(
+        update_fields=[
+            "due_at",
+            "last_reviewed_at",
+            "interval_days",
+            "ease_factor",
+            "consecutive_correct_reviews",
+            "review_count",
+            "lapse_count",
+        ]
+    )
+
+    due_remaining = UserFlashcard.objects.filter(user=request.user, due_at__lte=timezone.now()).count()
+    return JsonResponse({"flashcard": _serialize_flashcard(flashcard), "due_remaining": due_remaining})
