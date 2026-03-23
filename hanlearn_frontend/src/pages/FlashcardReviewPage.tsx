@@ -65,6 +65,9 @@ export function FlashcardReviewPage() {
   const [isComplete, setIsComplete] = useState(false)
   const [initialDueCount, setInitialDueCount] = useState(0)
   const [totalFlashcards, setTotalFlashcards] = useState(0)
+  const [viewMode, setViewMode] = useState<'review' | 'table'>('review')
+  const [allCards, setAllCards] = useState<FlashcardData[]>([])
+  const [isLoadingAll, setIsLoadingAll] = useState(false)
 
   const hasCards = cards.length > 0
   const currentCard = hasCards ? cards[0] : null
@@ -145,6 +148,74 @@ export function FlashcardReviewPage() {
     void loadFlashcards()
   }, [loadFlashcards])
 
+  const loadAllFlashcards = useCallback(async () => {
+    setIsLoadingAll(true)
+    setErrorMessage(null)
+    try {
+      const response = await fetch(buildApiUrl('/api/flashcards'), {
+        method: 'GET',
+        credentials: 'include',
+        headers: { Accept: 'application/json' },
+      })
+      const payload = await parseApiJson<{
+        error?: unknown
+        flashcards?: FlashcardRow[]
+      }>(response)
+      if (!response.ok) {
+        const error = typeof payload.error === 'string' ? payload.error : 'Failed to load flashcards.'
+        throw new Error(error)
+      }
+      const validRows: FlashcardData[] = []
+      for (const row of payload.flashcards ?? []) {
+        if (typeof row.id !== 'number') continue
+        if (typeof row.word !== 'string') continue
+        if (typeof row.meaning !== 'string') continue
+        if (typeof row.pinyin !== 'string') continue
+        if (typeof row.created_at !== 'string') continue
+        if (typeof row.due_at !== 'string') continue
+        validRows.push({
+          id: row.id,
+          word: row.word.trim(),
+          pinyin: row.pinyin,
+          meaning: row.meaning,
+          created_at: row.created_at,
+          due_at: row.due_at,
+          last_reviewed_at: typeof row.last_reviewed_at === 'string' ? row.last_reviewed_at : null,
+          interval_days: typeof row.interval_days === 'number' ? row.interval_days : 0,
+          ease_factor: typeof row.ease_factor === 'number' ? row.ease_factor : 2.5,
+          consecutive_correct_reviews:
+            typeof row.consecutive_correct_reviews === 'number' ? row.consecutive_correct_reviews : 0,
+          review_count: typeof row.review_count === 'number' ? row.review_count : 0,
+          lapse_count: typeof row.lapse_count === 'number' ? row.lapse_count : 0,
+        })
+      }
+      validRows.sort((a, b) => new Date(a.due_at).getTime() - new Date(b.due_at).getTime())
+      setAllCards(validRows)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unexpected error while loading flashcards.'
+      setErrorMessage(message)
+    } finally {
+      setIsLoadingAll(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (viewMode === 'table' && allCards.length === 0 && !isLoadingAll) {
+      void loadAllFlashcards()
+    }
+  }, [viewMode, allCards.length, isLoadingAll, loadAllFlashcards])
+
+  const formatDate = (iso: string | null) => {
+    if (!iso) return '—'
+    return new Date(iso).toLocaleString(undefined, {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+  }
+
   const handleRevealWord = () => {
     setIsFlipped(true)
   }
@@ -187,117 +258,145 @@ export function FlashcardReviewPage() {
       <div className="pointer-events-none absolute -left-28 top-24 h-64 w-64 rounded-full bg-[#f6aa72]/15 blur-3xl" />
       <div className="pointer-events-none absolute -right-16 top-80 h-72 w-72 rounded-full bg-[#d1451b]/10 blur-3xl" />
 
-      <main className="mx-auto min-h-screen w-full max-w-2xl px-6 py-10 sm:px-10 lg:px-12">
-        {isLoading ? (
-          <div className="flex items-center justify-center h-96">
-            <div className="text-center">
-              <p className="text-xl font-semibold text-[#75695f]">Loading flashcards...</p>
-            </div>
-          </div>
-        ) : errorMessage ? (
-          <div className="flex items-center justify-center h-96">
-            <div className="text-center max-w-md">
-              <p className="text-xl font-semibold text-[#8c2f11]">{errorMessage}</p>
-            </div>
-          </div>
-        ) : isComplete ? (
-          <div className="flex items-center justify-center h-96">
-            <div className="text-center">
-              <p className="text-3xl font-bold text-[#1b1714]">Deck complete</p>
-              <p className="mt-3 text-[#75695f]">You reviewed every flashcard that was due.</p>
-              <button
-                onClick={() => {
-                  setIsFlipped(false)
-                  setIsComplete(false)
-                  void window.location.reload()
-                }}
-                className="mt-6 px-6 py-3 rounded-xl bg-[#d1451b] text-white font-semibold transition hover:bg-[#b63e19]"
-              >
-                Refresh due deck
-              </button>
-            </div>
-          </div>
-        ) : !hasCards ? (
-          // Empty state
-          <div className="flex items-center justify-center h-96">
-            <div className="text-center">
-              <p className="text-xl font-semibold text-[#75695f]">
-                {totalFlashcards > 0 ? 'No flashcards are due right now.' : 'Extract words in the miner to create flashcards.'}
-              </p>
-            </div>
-          </div>
-        ) : (
-          // Flashcard content
+      {/* View toggle — fixed top-right, outside main so it never shifts */}
+      <div className="fixed right-4 top-20 z-50 sm:top-24">
+        <div className="inline-flex rounded-xl bg-[#e6d5c3] p-1 gap-1 shadow-md">
+          <button
+            onClick={() => setViewMode('review')}
+            className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition ${
+              viewMode === 'review'
+                ? 'bg-white text-[#1b1714] shadow-sm'
+                : 'text-[#75695f] hover:text-[#1b1714]'
+            }`}
+          >
+            Review
+          </button>
+          <button
+            onClick={() => setViewMode('table')}
+            className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition ${
+              viewMode === 'table'
+                ? 'bg-white text-[#1b1714] shadow-sm'
+                : 'text-[#75695f] hover:text-[#1b1714]'
+            }`}
+          >
+            Manage
+          </button>
+        </div>
+      </div>
+
+      <main className={`mx-auto min-h-screen w-full px-6 py-10 sm:px-10 lg:px-12 ${viewMode === 'table' ? 'max-w-6xl' : 'max-w-2xl'}`}>
+        {viewMode === 'review' ? (
           <>
-            {/* Header */}
-            <div className="mb-12 flex items-center justify-between">
-              <div>
-                <h1 className="text-3xl font-bold text-[#1b1714]">Review Flashcards</h1>
-                <p className="mt-1 text-sm text-[#75695f]">
-                  {remainingCards} due now out of {totalFlashcards} saved
-                </p>
-              </div>
-              <div className="text-right">
-                <div className="h-3 w-48 rounded-full bg-[#e6d5c3] overflow-hidden">
-                  <div
-                    className="h-full bg-[#d1451b] transition-all duration-300"
-                    style={{ width: `${progressWidth}%` }}
-                  />
+            {isLoading ? (
+              <div className="flex items-center justify-center h-96">
+                <div className="text-center">
+                  <p className="text-xl font-semibold text-[#75695f]">Loading flashcards...</p>
                 </div>
               </div>
-            </div>
-
-            {/* Flashcard Container */}
-            <div className="mb-8 perspective">
-              {!isFlipped ? (
-                // Front of card - Meaning
-                <div className="group h-96 relative">
-                  <div className="absolute inset-0 rounded-3xl border-2 border-[#d6c7b6] bg-white shadow-2xl shadow-[#bf9f83]/20 p-8 flex flex-col items-center justify-center transform transition-transform hover:shadow-2xl hover:shadow-[#bf9f83]/30">
-                    <div className="text-center">
-                      <p className="mono text-xs uppercase tracking-[0.2em] text-[#8a7a6a] mb-4">
-                        Meaning
-                      </p>
-                      <p className="mb-8 max-h-48 overflow-y-auto px-2 text-base font-semibold leading-relaxed text-[#1b1714] sm:text-lg break-words">
-                        {currentCard?.meaning}
-                      </p>
-                      <button
-                        onClick={handleRevealWord}
-                        className="px-8 py-3 rounded-xl bg-[#d1451b] text-white font-semibold text-lg shadow-lg shadow-[#d1451b]/20 transition hover:-translate-y-0.5 hover:bg-[#b63e19] active:translate-y-0"
-                      >
-                        Reveal Word
-                      </button>
+            ) : errorMessage ? (
+              <div className="flex items-center justify-center h-96">
+                <div className="text-center max-w-md">
+                  <p className="text-xl font-semibold text-[#8c2f11]">{errorMessage}</p>
+                </div>
+              </div>
+            ) : isComplete ? (
+              <div className="flex items-center justify-center h-96">
+                <div className="text-center">
+                  <p className="text-3xl font-bold text-[#1b1714]">Deck complete</p>
+                  <p className="mt-3 text-[#75695f]">You reviewed every flashcard that was due.</p>
+                  <button
+                    onClick={() => {
+                      setIsFlipped(false)
+                      setIsComplete(false)
+                      void window.location.reload()
+                    }}
+                    className="mt-6 px-6 py-3 rounded-xl bg-[#d1451b] text-white font-semibold transition hover:bg-[#b63e19]"
+                  >
+                    Refresh due deck
+                  </button>
+                </div>
+              </div>
+            ) : !hasCards ? (
+              // Empty state
+              <div className="flex items-center justify-center h-96">
+                <div className="text-center">
+                  <p className="text-xl font-semibold text-[#75695f]">
+                    {totalFlashcards > 0 ? 'No flashcards are due right now.' : 'Extract words in the miner to create flashcards.'}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              // Flashcard content
+              <>
+                {/* Header */}
+                <div className="mb-12 flex items-center justify-between">
+                  <div>
+                    <h1 className="text-3xl font-bold text-[#1b1714]">Review Flashcards</h1>
+                    <p className="mt-1 text-sm text-[#75695f]">
+                      {remainingCards} due now out of {totalFlashcards} saved
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <div className="h-3 w-48 rounded-full bg-[#e6d5c3] overflow-hidden">
+                      <div
+                        className="h-full bg-[#d1451b] transition-all duration-300"
+                        style={{ width: `${progressWidth}%` }}
+                      />
                     </div>
                   </div>
                 </div>
-              ) : (
-                // Back of card - Word, Pronunciation, Meaning
-                <div className="group h-96 relative">
-                  <div className="absolute inset-0 rounded-3xl border-2 border-[#d6c7b6] bg-gradient-to-br from-[#fff4e8] to-white shadow-2xl shadow-[#bf9f83]/20 p-8 flex flex-col items-center justify-center transform transition-transform">
-                    <div className="text-center w-full">
-                      <p className="mono text-xs uppercase tracking-[0.2em] text-[#8a7a6a] mb-4">
-                        Word
-                      </p>
-                      <p className="text-6xl font-bold text-[#d1451b] mb-3">
-                        {currentCard?.word}
-                      </p>
-                      <p className="text-2xl text-[#5e5349] font-medium mb-6">
-                        {currentCard?.pinyin}
-                      </p>
 
-                      <p className="mb-2 text-sm font-medium text-[#8a7a6a]">
-                        Current interval: {currentCard?.interval_days ?? 0} day{currentCard?.interval_days === 1 ? '' : 's'}
-                      </p>
-
-                      <div className="h-px bg-[#e6d5c3] my-6" />
-
-                      <p className="mono text-xs uppercase tracking-[0.2em] text-[#8a7a6a] mb-2">
-                        Meaning
-                      </p>
-                      <p className="mb-8 max-h-36 overflow-y-auto px-2 text-sm font-medium leading-relaxed text-[#4c423a] sm:text-base break-words">
-                        {currentCard?.meaning}
-                      </p>
+                {/* Flashcard Container */}
+                <div className="mb-8 perspective">
+                  {!isFlipped ? (
+                    // Front of card - Meaning
+                    <div className="group h-96 relative">
+                      <div className="absolute inset-0 rounded-3xl border-2 border-[#d6c7b6] bg-white shadow-2xl shadow-[#bf9f83]/20 p-8 flex flex-col items-center justify-center transform transition-transform hover:shadow-2xl hover:shadow-[#bf9f83]/30">
+                        <div className="text-center">
+                          <p className="mono text-xs uppercase tracking-[0.2em] text-[#8a7a6a] mb-4">
+                            Meaning
+                          </p>
+                          <p className="mb-8 max-h-48 overflow-y-auto px-2 text-base font-semibold leading-relaxed text-[#1b1714] sm:text-lg break-words">
+                            {currentCard?.meaning}
+                          </p>
+                          <button
+                            onClick={handleRevealWord}
+                            className="px-8 py-3 rounded-xl bg-[#d1451b] text-white font-semibold text-lg shadow-lg shadow-[#d1451b]/20 transition hover:-translate-y-0.5 hover:bg-[#b63e19] active:translate-y-0"
+                          >
+                            Reveal Word
+                          </button>
+                        </div>
+                      </div>
                     </div>
-                  </div>
+                  ) : (
+                    // Back of card - Word, Pronunciation, Meaning
+                    <div className="group h-96 relative">
+                      <div className="absolute inset-0 rounded-3xl border-2 border-[#d6c7b6] bg-gradient-to-br from-[#fff4e8] to-white shadow-2xl shadow-[#bf9f83]/20 p-8 flex flex-col items-center justify-center transform transition-transform">
+                        <div className="text-center w-full">
+                          <p className="mono text-xs uppercase tracking-[0.2em] text-[#8a7a6a] mb-4">
+                            Word
+                          </p>
+                          <p className="text-6xl font-bold text-[#d1451b] mb-3">
+                            {currentCard?.word}
+                          </p>
+                          <p className="text-2xl text-[#5e5349] font-medium mb-6">
+                            {currentCard?.pinyin}
+                          </p>
+
+                          <p className="mb-2 text-sm font-medium text-[#8a7a6a]">
+                            Current interval: {currentCard?.interval_days ?? 0} day{currentCard?.interval_days === 1 ? '' : 's'}
+                          </p>
+
+                          <div className="h-px bg-[#e6d5c3] my-6" />
+
+                          <p className="mono text-xs uppercase tracking-[0.2em] text-[#8a7a6a] mb-2">
+                            Meaning
+                          </p>
+                          <p className="mb-8 max-h-36 overflow-y-auto px-2 text-sm font-medium leading-relaxed text-[#4c423a] sm:text-base break-words">
+                            {currentCard?.meaning}
+                          </p>
+                        </div>
+                      </div>
                 </div>
               )}
             </div>
@@ -336,16 +435,95 @@ export function FlashcardReviewPage() {
               </div>
             )}
 
-            {/* Card footer - hidden until revealed */}
-            {isFlipped && (
-              <div className="mt-8 text-center">
-                <button
-                  onClick={() => setIsFlipped(false)}
-                  className="text-sm font-medium text-[#75695f] hover:text-[#5e5349] transition"
-                >
-                  Hide word
-                </button>
+                {/* Card footer - hidden until revealed */}
+                {isFlipped && (
+                  <div className="mt-8 text-center">
+                    <button
+                      onClick={() => setIsFlipped(false)}
+                      className="text-sm font-medium text-[#75695f] hover:text-[#5e5349] transition"
+                    >
+                      Hide word
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+          </>
+        ) : (
+          // Table view
+          <>
+            {isLoadingAll ? (
+              <div className="flex items-center justify-center h-64">
+                <p className="text-xl font-semibold text-[#75695f]">Loading flashcards...</p>
               </div>
+            ) : errorMessage ? (
+              <div className="flex items-center justify-center h-64">
+                <p className="text-xl font-semibold text-[#8c2f11]">{errorMessage}</p>
+              </div>
+            ) : allCards.length === 0 ? (
+              <div className="flex items-center justify-center h-64">
+                <p className="text-xl font-semibold text-[#75695f]">No flashcards found.</p>
+              </div>
+            ) : (
+              <>
+                <div className="mb-6">
+                  <h1 className="text-3xl font-bold text-[#1b1714]">All Flashcards</h1>
+                  <p className="mt-1 text-sm text-[#75695f]">
+                    {allCards.length} card{allCards.length === 1 ? '' : 's'} total
+                  </p>
+                </div>
+                <div className="overflow-x-auto rounded-2xl border border-[#d6c7b6] bg-white shadow-lg shadow-[#bf9f83]/10">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-[#e6d5c3] bg-[#faf5ef]">
+                        <th className="px-4 py-3 text-left font-semibold text-[#5e5349]">Word</th>
+                        <th className="px-4 py-3 text-left font-semibold text-[#5e5349]">Pinyin</th>
+                        <th className="px-4 py-3 text-left font-semibold text-[#5e5349]">Meaning</th>
+                        <th className="px-4 py-3 text-left font-semibold text-[#5e5349]">Created</th>
+                        <th className="px-4 py-3 text-left font-semibold text-[#5e5349]">Due</th>
+                        <th className="px-4 py-3 text-left font-semibold text-[#5e5349]">Last Reviewed</th>
+                        <th className="px-4 py-3 text-right font-semibold text-[#5e5349]">Interval</th>
+                        <th className="px-4 py-3 text-right font-semibold text-[#5e5349]">Ease</th>
+                        <th className="px-4 py-3 text-right font-semibold text-[#5e5349]">Reviews</th>
+                        <th className="px-4 py-3 text-right font-semibold text-[#5e5349]">Lapses</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {allCards.map((card, i) => (
+                        <tr
+                          key={card.id}
+                          className={`border-b border-[#f0e6d8] transition-colors hover:bg-[#fdf8f2] ${
+                            i % 2 === 0 ? 'bg-white' : 'bg-[#fdfaf6]'
+                          }`}
+                        >
+                          <td className="px-4 py-3 font-bold text-[#d1451b] text-base">{card.word}</td>
+                          <td className="px-4 py-3 text-[#5e5349]">{card.pinyin}</td>
+                          <td className="px-4 py-3 text-[#1b1714] max-w-xs">
+                            <span className="line-clamp-2">{card.meaning}</span>
+                          </td>
+                          <td className="px-4 py-3 text-[#75695f] whitespace-nowrap">{formatDate(card.created_at)}</td>
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            <span
+                              className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${
+                                new Date(card.due_at) <= new Date()
+                                  ? 'bg-[#ffeded] text-[#c0392b]'
+                                  : 'bg-[#edf6e8] text-[#3a7d44]'
+                              }`}
+                            >
+                              {formatDate(card.due_at)}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-[#75695f] whitespace-nowrap">{formatDate(card.last_reviewed_at)}</td>
+                          <td className="px-4 py-3 text-right text-[#5e5349]">{card.interval_days}d</td>
+                          <td className="px-4 py-3 text-right text-[#5e5349]">{card.ease_factor.toFixed(2)}</td>
+                          <td className="px-4 py-3 text-right text-[#5e5349]">{card.review_count}</td>
+                          <td className="px-4 py-3 text-right text-[#5e5349]">{card.lapse_count}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
             )}
           </>
         )}
