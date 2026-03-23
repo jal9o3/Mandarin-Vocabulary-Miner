@@ -236,11 +236,14 @@ export function FlashcardReviewPage() {
     }
   }, [])
 
-  useEffect(() => {
-    if (viewMode === 'table' && allCards.length === 0 && !isLoadingAll) {
-      void loadAllFlashcards()
-    }
-  }, [viewMode, allCards.length, isLoadingAll, loadAllFlashcards])
+  const handleReviewView = () => {
+    setViewMode('review')
+  }
+
+  const handleManageView = () => {
+    setViewMode('table')
+    void loadAllFlashcards()
+  }
 
   const formatDate = (iso: string | null) => {
     if (!iso) return '—'
@@ -299,7 +302,7 @@ export function FlashcardReviewPage() {
       <div className="fixed right-4 top-20 z-50 sm:top-24">
         <div className="inline-flex rounded-xl bg-[#e6d5c3] p-1 gap-1 shadow-md">
           <button
-            onClick={() => setViewMode('review')}
+            onClick={handleReviewView}
             className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition ${
               viewMode === 'review'
                 ? 'bg-white text-[#1b1714] shadow-sm'
@@ -309,7 +312,7 @@ export function FlashcardReviewPage() {
             Review
           </button>
           <button
-            onClick={() => setViewMode('table')}
+            onClick={handleManageView}
             className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition ${
               viewMode === 'table'
                 ? 'bg-white text-[#1b1714] shadow-sm'
