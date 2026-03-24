@@ -576,6 +576,36 @@ def save_text_view(request: HttpRequest) -> JsonResponse:
 
 
 @csrf_exempt
+@require_http_methods(["PATCH"])
+def edit_saved_text_view(request: HttpRequest, text_id: int) -> JsonResponse:
+    if not request.user.is_authenticated:
+        return JsonResponse({"error": "Sign in to manage your library."}, status=401)
+
+    try:
+        saved = SavedText.objects.get(id=text_id, user=request.user)
+    except SavedText.DoesNotExist:
+        return JsonResponse({"error": "Text not found."}, status=404)
+
+    payload = _json_body(request)
+    content = payload.get("content", saved.content)
+    title = payload.get("title", saved.title)
+
+    if not isinstance(content, str) or not content.strip():
+        return JsonResponse({"error": "Provide non-empty 'content' as a string."}, status=400)
+    if not isinstance(title, str):
+        title = saved.title
+
+    saved.content = content.strip()
+    saved.title = title.strip()
+    saved.hsk_level = compute_text_hsk_level(saved.content)
+    saved.save(update_fields=["content", "title", "hsk_level"])
+
+    return JsonResponse(
+        {"id": saved.id, "title": saved.title, "content": saved.content, "hsk_level": saved.hsk_level, "created_at": saved.created_at.isoformat()}
+    )
+
+
+@csrf_exempt
 @require_http_methods(["DELETE"])
 def delete_saved_text_view(request: HttpRequest, text_id: int) -> JsonResponse:
     if not request.user.is_authenticated:

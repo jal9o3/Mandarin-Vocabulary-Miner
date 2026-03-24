@@ -5,6 +5,7 @@ from .views import (
     analyze_text_view,
     auth_me_view,
     delete_saved_text_view,
+    edit_saved_text_view,
     flashcard_detail_view,
     flashcards_view,
     create_flashcards_view,
@@ -37,4 +38,5 @@ urlpatterns = [
     path("library", library_view, name="library-list"),
     path("library/save", save_text_view, name="library-save"),
     path("library/<int:text_id>", delete_saved_text_view, name="library-delete"),
+    path("library/<int:text_id>/edit", edit_saved_text_view, name="library-edit"),
 ]
