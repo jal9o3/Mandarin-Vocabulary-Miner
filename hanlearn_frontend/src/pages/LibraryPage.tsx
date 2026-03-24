@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? ''
 
@@ -112,10 +112,12 @@ function TextCard({
 }
 
 export function LibraryPage() {
-  const navigate = useNavigate()
   const [texts, setTexts] = useState<SavedText[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
+
+  // Reading modal state
+  const [readingText, setReadingText] = useState<SavedText | null>(null)
 
   // Edit modal state
   const [editingText, setEditingText] = useState<SavedText | null>(null)
@@ -156,7 +158,7 @@ export function LibraryPage() {
   }, [texts])
 
   const handleOpen = (text: SavedText) => {
-    navigate('/paste', { state: { prefillText: text.content } })
+    setReadingText(text)
   }
 
   const handleOpenEdit = (text: SavedText) => {
@@ -271,6 +273,39 @@ export function LibraryPage() {
           </div>
         </section>
       </main>
+
+      {/* Reading modal */}
+      {readingText ? (
+        <div className="fixed inset-0 z-40 grid place-items-center bg-[#1b1714]/50 px-4 py-8">
+          <div className="relative flex w-full max-w-2xl flex-col rounded-2xl border border-[#d8ccbd] bg-white shadow-2xl" style={{ maxHeight: '90vh' }}>
+            {/* Close button */}
+            <button
+              type="button"
+              aria-label="Close"
+              onClick={() => setReadingText(null)}
+              className="absolute right-4 top-4 rounded-md px-2 py-1 text-sm font-bold text-[#5b4f46] transition hover:bg-[#faf6f0]"
+            >
+              ✕
+            </button>
+
+            {/* Header */}
+            <div className="border-b border-[#ede3d6] px-6 pt-5 pb-4 pr-12">
+              <span className="mono text-[10px] uppercase tracking-[0.18em] text-[#8d7c6f]">HSK {readingText.hsk_level}</span>
+              <h2 className="mt-0.5 text-xl font-extrabold text-[#1b1714]">
+                {readingText.title || readingText.content.slice(0, 60)}
+              </h2>
+              <p className="mt-0.5 text-xs text-[#a09080]">{new Date(readingText.created_at).toLocaleDateString()}</p>
+            </div>
+
+            {/* Scrollable body */}
+            <div className="overflow-y-auto px-6 py-5">
+              <p className="whitespace-pre-wrap text-base leading-loose text-[#2f261f]">
+                {readingText.content}
+              </p>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {/* Edit modal */}
       {editingText ? (
