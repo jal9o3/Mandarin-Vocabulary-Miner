@@ -404,6 +404,81 @@ def flashcards_view(request: HttpRequest) -> JsonResponse:
 
 
 @csrf_exempt
+@require_http_methods(["PUT", "DELETE"])
+def flashcard_detail_view(request: HttpRequest, flashcard_id: int) -> JsonResponse:
+    if not request.user.is_authenticated:
+        return JsonResponse({"error": "Create an account or sign in to manage flashcards."}, status=401)
+
+    try:
+        flashcard = UserFlashcard.objects.select_related("word").get(id=flashcard_id, user=request.user)
+    except UserFlashcard.DoesNotExist:
+        return JsonResponse({"error": "Flashcard not found."}, status=404)
+
+    if request.method == "DELETE":
+        flashcard.delete()
+        return JsonResponse({"deleted": True, "id": flashcard_id})
+
+    payload = _json_body(request)
+    word_value = payload.get("word")
+    pinyin_value = payload.get("pinyin")
+    meaning_value = payload.get("meaning")
+
+    if not isinstance(word_value, str) or not word_value.strip():
+        return JsonResponse({"error": "Provide non-empty 'word' as a string."}, status=400)
+    if not isinstance(pinyin_value, str):
+        return JsonResponse({"error": "Provide 'pinyin' as a string."}, status=400)
+    if not isinstance(meaning_value, str):
+        return JsonResponse({"error": "Provide 'meaning' as a string."}, status=400)
+
+    next_word_text = word_value.strip()
+    next_pinyin = pinyin_value.strip()
+    next_meaning = meaning_value.strip()
+
+    with transaction.atomic():
+        next_word = flashcard.word
+
+        if flashcard.word.text != next_word_text:
+            next_word, _ = Word.objects.get_or_create(
+                text=next_word_text,
+                defaults={"pinyin": next_pinyin},
+            )
+
+            if next_pinyin and next_word.pinyin != next_pinyin:
+                next_word.pinyin = next_pinyin
+                next_word.save(update_fields=["pinyin"])
+
+            duplicate = (
+                UserFlashcard.objects.select_for_update()
+                .filter(user=request.user, word=next_word)
+                .exclude(id=flashcard.id)
+                .first()
+            )
+            if duplicate is not None:
+                merged_meaning = _merge_meanings(duplicate.meaning, [next_meaning] if next_meaning else [])
+                if merged_meaning != duplicate.meaning:
+                    duplicate.meaning = merged_meaning
+                    duplicate.save(update_fields=["meaning"])
+
+                flashcard.delete()
+                return JsonResponse(
+                    {
+                        "flashcard": _serialize_flashcard(duplicate),
+                        "merged": True,
+                        "deleted_id": flashcard_id,
+                    }
+                )
+        elif next_pinyin != flashcard.word.pinyin:
+            flashcard.word.pinyin = next_pinyin
+            flashcard.word.save(update_fields=["pinyin"])
+
+        flashcard.word = next_word
+        flashcard.meaning = next_meaning
+        flashcard.save(update_fields=["word", "meaning"])
+
+    return JsonResponse({"flashcard": _serialize_flashcard(flashcard), "merged": False})
+
+
+@csrf_exempt
 @require_http_methods(["POST"])
 def review_flashcard_view(request: HttpRequest, flashcard_id: int) -> JsonResponse:
     if not request.user.is_authenticated:

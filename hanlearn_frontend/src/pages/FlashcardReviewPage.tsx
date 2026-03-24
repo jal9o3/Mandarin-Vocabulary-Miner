@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { type FormEvent, useCallback, useEffect, useState } from 'react'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? ''
 
@@ -112,6 +112,47 @@ function EyeIcon({ open }: { open: boolean }) {
   )
 }
 
+function PencilIcon() {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="h-4 w-4"
+      aria-hidden="true"
+    >
+      <path d="M12 20h9" />
+      <path d="m16.5 3.5 4 4L7 21H3v-4z" />
+    </svg>
+  )
+}
+
+function TrashIcon() {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="h-4 w-4"
+      aria-hidden="true"
+    >
+      <path d="M3 6h18" />
+      <path d="M8 6V4h8v2" />
+      <path d="M19 6l-1 14H6L5 6" />
+      <path d="M10 11v6" />
+      <path d="M14 11v6" />
+    </svg>
+  )
+}
+
 export function FlashcardReviewPage() {
   const [cards, setCards] = useState<FlashcardData[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -125,6 +166,12 @@ export function FlashcardReviewPage() {
   const [allCards, setAllCards] = useState<FlashcardData[]>([])
   const [isLoadingAll, setIsLoadingAll] = useState(false)
   const [showPinyin, setShowPinyin] = useState(true)
+  const [editingCard, setEditingCard] = useState<FlashcardData | null>(null)
+  const [editWord, setEditWord] = useState('')
+  const [editPinyin, setEditPinyin] = useState('')
+  const [editMeaning, setEditMeaning] = useState('')
+  const [isSavingEdit, setIsSavingEdit] = useState(false)
+  const [deletingCardId, setDeletingCardId] = useState<number | null>(null)
 
   const hasCards = cards.length > 0
   const currentCard = hasCards ? cards[0] : null
@@ -263,6 +310,97 @@ export function FlashcardReviewPage() {
   const handleManageView = () => {
     setViewMode('table')
     void loadAllFlashcards()
+  }
+
+  const openEditModal = (card: FlashcardData) => {
+    setEditingCard(card)
+    setEditWord(card.word)
+    setEditPinyin(card.pinyin)
+    setEditMeaning(card.meaning)
+  }
+
+  const closeEditModal = () => {
+    if (isSavingEdit) return
+    setEditingCard(null)
+    setEditWord('')
+    setEditPinyin('')
+    setEditMeaning('')
+  }
+
+  const handleEditSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!editingCard) return
+
+    const word = editWord.trim()
+    const pinyin = editPinyin.trim()
+    const meaning = editMeaning.trim()
+
+    if (!word) {
+      setErrorMessage('Word cannot be empty.')
+      return
+    }
+
+    setIsSavingEdit(true)
+    setErrorMessage(null)
+
+    try {
+      const response = await fetch(buildApiUrl(`/api/flashcards/${editingCard.id}`), {
+        method: 'PUT',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify({ word, pinyin, meaning }),
+      })
+
+      const payload = await parseApiJson<{ error?: unknown }>(response)
+
+      if (!response.ok) {
+        const error = typeof payload.error === 'string' ? payload.error : 'Failed to update flashcard.'
+        throw new Error(error)
+      }
+
+      await loadAllFlashcards()
+      void loadFlashcards()
+      closeEditModal()
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unexpected error while updating flashcard.'
+      setErrorMessage(message)
+    } finally {
+      setIsSavingEdit(false)
+    }
+  }
+
+  const handleDeleteCard = async (card: FlashcardData) => {
+    const shouldDelete = window.confirm(`Delete flashcard for "${card.word}"? This cannot be undone.`)
+    if (!shouldDelete) return
+
+    setDeletingCardId(card.id)
+    setErrorMessage(null)
+
+    try {
+      const response = await fetch(buildApiUrl(`/api/flashcards/${card.id}`), {
+        method: 'DELETE',
+        credentials: 'include',
+        headers: { Accept: 'application/json' },
+      })
+
+      const payload = await parseApiJson<{ error?: unknown }>(response)
+
+      if (!response.ok) {
+        const error = typeof payload.error === 'string' ? payload.error : 'Failed to delete flashcard.'
+        throw new Error(error)
+      }
+
+      await loadAllFlashcards()
+      void loadFlashcards()
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unexpected error while deleting flashcard.'
+      setErrorMessage(message)
+    } finally {
+      setDeletingCardId(null)
+    }
   }
 
   const formatDate = (iso: string | null) => {
@@ -586,6 +724,9 @@ export function FlashcardReviewPage() {
                         <th className="px-4 py-3 text-right font-semibold text-[#5e5349]">Ease</th>
                         <th className="px-4 py-3 text-right font-semibold text-[#5e5349]">Reviews</th>
                         <th className="px-4 py-3 text-right font-semibold text-[#5e5349]">Lapses</th>
+                        <th className="text-center sticky right-0 z-20 bg-[#faf5ef] px-4 py-3 font-semibold text-[#5e5349]">
+                          Actions
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
@@ -618,11 +759,94 @@ export function FlashcardReviewPage() {
                           <td className="px-4 py-3 text-right text-[#5e5349]">{card.ease_factor.toFixed(2)}</td>
                           <td className="px-4 py-3 text-right text-[#5e5349]">{card.review_count}</td>
                           <td className="px-4 py-3 text-right text-[#5e5349]">{card.lapse_count}</td>
+                          <td className={`sticky right-0 z-10 px-4 py-3 ${i % 2 === 0 ? 'bg-white' : 'bg-[#fdfaf6]'}`}>
+                            <div className="flex justify-end gap-2">
+                              <button
+                                type="button"
+                                onClick={() => openEditModal(card)}
+                                className="inline-flex items-center justify-center rounded-md border border-[#d6c7b6] bg-[#fff8ef] p-2 text-[#5e5349] transition hover:border-[#bfa286] hover:bg-[#fff1df] hover:text-[#1b1714]"
+                                aria-label={`Edit ${card.word}`}
+                                title="Edit flashcard"
+                              >
+                                <PencilIcon />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => void handleDeleteCard(card)}
+                                disabled={deletingCardId === card.id}
+                                className="inline-flex items-center justify-center rounded-md border border-[#e9b5b5] bg-[#fff0f0] p-2 text-[#c0392b] transition hover:border-[#dc8f8f] hover:bg-[#ffe3e3] hover:text-[#a12f24] disabled:cursor-not-allowed disabled:opacity-60"
+                                aria-label={`Delete ${card.word}`}
+                                title="Delete flashcard"
+                              >
+                                <TrashIcon />
+                              </button>
+                            </div>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
+
+                {editingCard ? (
+                  <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 px-4">
+                    <div className="w-full max-w-lg rounded-2xl border border-[#d6c7b6] bg-[#fffaf3] p-6 shadow-2xl">
+                      <h2 className="text-2xl font-bold text-[#1b1714]">Edit Flashcard</h2>
+                      <p className="mt-1 text-sm text-[#75695f]">Update the word, pinyin, and meaning.</p>
+
+                      <form className="mt-5 space-y-4" onSubmit={(event) => void handleEditSubmit(event)}>
+                        <label className="block text-sm font-semibold text-[#5e5349]">
+                          Word
+                          <input
+                            type="text"
+                            value={editWord}
+                            onChange={(event) => setEditWord(event.target.value)}
+                            className="mt-1 w-full rounded-lg border border-[#d6c7b6] bg-white px-3 py-2 text-[#1b1714] outline-none transition focus:border-[#d1451b]"
+                            required
+                          />
+                        </label>
+
+                        <label className="block text-sm font-semibold text-[#5e5349]">
+                          Pinyin
+                          <input
+                            type="text"
+                            value={editPinyin}
+                            onChange={(event) => setEditPinyin(event.target.value)}
+                            className="mt-1 w-full rounded-lg border border-[#d6c7b6] bg-white px-3 py-2 text-[#1b1714] outline-none transition focus:border-[#d1451b]"
+                          />
+                        </label>
+
+                        <label className="block text-sm font-semibold text-[#5e5349]">
+                          Meaning
+                          <textarea
+                            value={editMeaning}
+                            onChange={(event) => setEditMeaning(event.target.value)}
+                            rows={4}
+                            className="mt-1 w-full rounded-lg border border-[#d6c7b6] bg-white px-3 py-2 text-[#1b1714] outline-none transition focus:border-[#d1451b]"
+                          />
+                        </label>
+
+                        <div className="mt-2 flex justify-end gap-3">
+                          <button
+                            type="button"
+                            onClick={closeEditModal}
+                            disabled={isSavingEdit}
+                            className="rounded-lg border border-[#d6c7b6] px-4 py-2 font-semibold text-[#5e5349] transition hover:border-[#bfa286] hover:text-[#1b1714] disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="submit"
+                            disabled={isSavingEdit}
+                            className="rounded-lg bg-[#d1451b] px-4 py-2 font-semibold text-white transition hover:bg-[#b63e19] disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            {isSavingEdit ? 'Saving...' : 'Save changes'}
+                          </button>
+                        </div>
+                      </form>
+                    </div>
+                  </div>
+                ) : null}
               </>
             )}
           </>

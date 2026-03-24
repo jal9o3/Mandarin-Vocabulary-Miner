@@ -382,3 +382,34 @@ class MinerApiTests(TestCase):
         self.assertEqual(flashcard.lapse_count, 0)
         self.assertAlmostEqual(flashcard.ease_factor, 2.5)
         self.assertGreaterEqual(flashcard.due_at, before_review + timedelta(hours=23))
+
+    def test_update_flashcard_updates_word_pinyin_and_meaning(self):
+        user = User.objects.create_user(username="harry", password="TopSecret123")
+        self.client.force_login(user)
+
+        word = Word.objects.create(text="你好", pinyin="ni3 hao3")
+        flashcard = UserFlashcard.objects.create(user=user, word=word, meaning="hello")
+
+        response = self.client.put(
+            f"/api/flashcards/{flashcard.id}",
+            data=json.dumps({"word": "您好", "pinyin": "nin2 hao3", "meaning": "hello (polite)"}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        flashcard.refresh_from_db()
+        self.assertEqual(flashcard.word.text, "您好")
+        self.assertEqual(flashcard.word.pinyin, "nin2 hao3")
+        self.assertEqual(flashcard.meaning, "hello (polite)")
+
+    def test_delete_flashcard_removes_card(self):
+        user = User.objects.create_user(username="ivan", password="TopSecret123")
+        self.client.force_login(user)
+
+        word = Word.objects.create(text="谢谢", pinyin="xie4 xie")
+        flashcard = UserFlashcard.objects.create(user=user, word=word, meaning="thanks")
+
+        response = self.client.delete(f"/api/flashcards/{flashcard.id}")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(UserFlashcard.objects.filter(id=flashcard.id).exists())

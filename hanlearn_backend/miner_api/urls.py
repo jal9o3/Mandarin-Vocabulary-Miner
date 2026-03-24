@@ -4,6 +4,7 @@ from .views import (
     analyze_file_view,
     analyze_text_view,
     auth_me_view,
+    flashcard_detail_view,
     flashcards_view,
     create_flashcards_view,
     login_view,
@@ -28,5 +29,6 @@ urlpatterns = [
     path("auth/me", auth_me_view, name="auth-me"),
     path("flashcards", flashcards_view, name="flashcards-list"),
     path("flashcards/create", create_flashcards_view, name="flashcards-create"),
+    path("flashcards/<int:flashcard_id>", flashcard_detail_view, name="flashcards-detail"),
     path("flashcards/<int:flashcard_id>/review", review_flashcard_view, name="flashcards-review"),
 ]
