@@ -238,7 +238,17 @@ def analyze_text_view(request: HttpRequest) -> JsonResponse:
     if not isinstance(vocab_text, str):
         vocab_text = load_vocab(VOCAB_FILE)
 
-    analysis = analyze_text(text=text, vocab_text=vocab_text)
+    saved_flashcard_words: set[str] = set()
+    if request.user.is_authenticated:
+        saved_flashcard_words = set(
+            UserFlashcard.objects.filter(user=request.user).values_list("word__text", flat=True)
+        )
+
+    analysis = analyze_text(
+        text=text,
+        vocab_text=vocab_text,
+        saved_flashcard_words=saved_flashcard_words,
+    )
     return JsonResponse(analysis)
 
 
@@ -258,7 +268,17 @@ def analyze_file_view(request: HttpRequest) -> JsonResponse:
     if not isinstance(vocab_text, str):
         vocab_text = load_vocab(VOCAB_FILE)
 
-    analysis = analyze_text(text=text, vocab_text=vocab_text)
+    saved_flashcard_words: set[str] = set()
+    if request.user.is_authenticated:
+        saved_flashcard_words = set(
+            UserFlashcard.objects.filter(user=request.user).values_list("word__text", flat=True)
+        )
+
+    analysis = analyze_text(
+        text=text,
+        vocab_text=vocab_text,
+        saved_flashcard_words=saved_flashcard_words,
+    )
     analysis["filename"] = upload.name
     return JsonResponse(analysis)
 

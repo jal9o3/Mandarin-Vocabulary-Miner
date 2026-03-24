@@ -17,6 +17,7 @@ type AnalysisPayload = {
   total_occurrences: number
   words: RankedWord[]
   unknown_words: string[]
+  saved_flashcard_words?: string[]
   priority_drill_set?: Array<{
     word: string
     info: {
@@ -60,16 +61,24 @@ export function AnalyzePage() {
   const [hasSavedFlashcards, setHasSavedFlashcards] = useState(false)
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
   const priorityDrillSet = useMemo(
-    () =>
-      analysis?.priority_drill_set ??
-      analysis?.words
-        .filter((row) => !row.is_known)
-        .slice(0, 12)
-        .map((row) => ({
-          word: row.word,
-          info: null,
-        })) ??
-      [],
+    () => {
+      if (analysis?.priority_drill_set) {
+        return analysis.priority_drill_set
+      }
+
+      const savedWords = new Set(analysis?.saved_flashcard_words ?? [])
+      return (
+        analysis?.words
+          .filter((row) => !row.is_known)
+          .filter((row) => !savedWords.has(row.word))
+          .slice(0, 12)
+          .map((row) => ({
+            word: row.word,
+            info: null,
+          })) ??
+        []
+      )
+    },
     [analysis],
   )
   const flashcardWords = useMemo(
@@ -95,23 +104,27 @@ export function AnalyzePage() {
     [analysis, priorityDrillSet],
   )
   const unknownWordSet = useMemo(() => new Set((analysis?.unknown_words ?? []).filter((word) => word.length > 0)), [analysis])
+  const savedFlashcardWordSet = useMemo(
+    () => new Set((analysis?.saved_flashcard_words ?? []).filter((word) => word.length > 0)),
+    [analysis],
+  )
   const highlightedPassageParts = useMemo(() => {
     const sourceText = state?.sourceText ?? ''
     if (!sourceText.length) {
       return [sourceText]
     }
 
-    const uniqueUnknownWords = [...unknownWordSet]
-    if (!uniqueUnknownWords.length) {
+    const uniqueHighlightedWords = [...new Set([...unknownWordSet, ...savedFlashcardWordSet])]
+    if (!uniqueHighlightedWords.length) {
       return [sourceText]
     }
 
-    const escapedWords = uniqueUnknownWords
+    const escapedWords = uniqueHighlightedWords
       .sort((a, b) => b.length - a.length)
       .map((word) => word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
     const matcher = new RegExp(`(${escapedWords.join('|')})`, 'g')
     return sourceText.split(matcher).filter((part) => part.length > 0)
-  }, [state?.sourceText, unknownWordSet])
+  }, [savedFlashcardWordSet, state?.sourceText, unknownWordSet])
 
   useEffect(() => {
     const loadAuth = async () => {
@@ -243,7 +256,11 @@ export function AnalyzePage() {
               {/* <h2 className="text-lg font-bold text-[#1b1714]">Analyzed passage</h2> */}
               <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-[#4b3f36]">
                 {highlightedPassageParts.map((part, index) =>
-                  unknownWordSet.has(part) ? (
+                  savedFlashcardWordSet.has(part) ? (
+                    <span key={`${part}-${index}`} className="text-[#c18a00]">
+                      {part}
+                    </span>
+                  ) : unknownWordSet.has(part) ? (
                     <span key={`${part}-${index}`} className="text-[#b42020]">
                       {part}
                     </span>

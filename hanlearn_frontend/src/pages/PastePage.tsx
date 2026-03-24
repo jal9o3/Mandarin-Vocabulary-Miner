@@ -195,6 +195,7 @@ export function PastePage() {
     try {
       const response = await fetch(`${API_BASE_URL}/api/analyze`, {
         method: 'POST',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
         },

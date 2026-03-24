@@ -350,7 +350,8 @@ def build_vocab_screen(text: str) -> dict:
     }
 
 
-def analyze_text(text: str, vocab_text: str) -> dict:
+def analyze_text(text: str, vocab_text: str, saved_flashcard_words: set[str] | None = None) -> dict:
+    saved_words = {word.strip() for word in (saved_flashcard_words or set()) if isinstance(word, str) and word.strip()}
     cleaned_text = remove_punctuation(text or "")
     if not cleaned_text.strip():
         return {
@@ -359,6 +360,8 @@ def analyze_text(text: str, vocab_text: str) -> dict:
             "total_occurrences": 0,
             "words": [],
             "unknown_words": [],
+            "saved_flashcard_words": [],
+            "priority_drill_set": [],
         }
 
     words = list(jieba.cut(cleaned_text))
@@ -390,6 +393,8 @@ def analyze_text(text: str, vocab_text: str) -> dict:
     for row in ranked_words:
         if row["is_known"]:
             continue
+        if row["word"] in saved_words:
+            continue
         resolved_info = _resolve_wordlist_info(row["word"], wordlist_info_lookup)
         priority_drill_set.append(
             {
@@ -406,6 +411,7 @@ def analyze_text(text: str, vocab_text: str) -> dict:
         "total_occurrences": total_occurrences,
         "words": ranked_words,
         "unknown_words": unknown_words,
+        "saved_flashcard_words": sorted(saved_words),
         "priority_drill_set": priority_drill_set,
     }
 
