@@ -450,9 +450,22 @@ export function FlashcardReviewPage() {
                           {/* <p className="mono text-xs uppercase tracking-[0.2em] text-[#8a7a6a] mb-4">
                             Word
                           </p> */}
-                          <p className="text-6xl font-bold text-[#d1451b] mb-3">
-                            {currentCard?.word}
-                          </p>
+                          <div className="mb-3 flex justify-center">
+                            <div className="relative inline-flex items-center">
+                              <p className="text-6xl font-bold text-[#d1451b]">
+                                {currentCard?.word}
+                              </p>
+                              <button
+                                type="button"
+                                onClick={speakWord}
+                                className="absolute left-full ml-2 inline-flex items-center justify-center rounded-md bg-transparent p-1.5 text-[#75695f] transition hover:text-[#5e5349]"
+                                aria-label="Play pronunciation"
+                                title="Play pronunciation"
+                              >
+                                <SpeakerIcon />
+                              </button>
+                            </div>
+                          </div>
                           <div className="flex justify-center">
                             <div className="relative inline-flex items-center">
                               <p className="text-2xl text-[#5e5349] font-medium">
@@ -468,18 +481,6 @@ export function FlashcardReviewPage() {
                                 <EyeIcon open={showPinyin} />
                               </button>
                             </div>
-                          </div>
-                          <div className="mb-6 mt-3 flex justify-center">
-                            <button
-                              type="button"
-                              onClick={speakWord}
-                              className="inline-flex items-center gap-1.5 rounded-lg border border-[#d6c7b6] bg-white px-3 py-1.5 text-sm font-medium text-[#75695f] shadow-sm transition hover:border-[#c4a882] hover:text-[#5e5349]"
-                              aria-label="Play pronunciation"
-                              title="Play pronunciation"
-                            >
-                              <SpeakerIcon />
-                              {/* Listen */}
-                            </button>
                           </div>
 
                           {/* <p className="mb-2 text-sm font-medium text-[#8a7a6a]">
