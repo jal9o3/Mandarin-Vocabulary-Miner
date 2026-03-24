@@ -56,6 +56,26 @@ type FlashcardRow = {
   lapse_count?: unknown
 }
 
+function SpeakerIcon() {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="h-4 w-4"
+      aria-hidden="true"
+    >
+      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+      <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+      <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+    </svg>
+  )
+}
+
 function EyeIcon({ open }: { open: boolean }) {
   return open ? (
     <svg
@@ -256,8 +276,22 @@ export function FlashcardReviewPage() {
     })
   }
 
+  const speakWord = useCallback(() => {
+    if (!currentCard) return
+    const utterance = new SpeechSynthesisUtterance(currentCard.word)
+    utterance.lang = 'zh-CN'
+    window.speechSynthesis.cancel()
+    window.speechSynthesis.speak(utterance)
+  }, [currentCard])
+
   const handleRevealWord = () => {
     setIsFlipped(true)
+    if (currentCard) {
+      const utterance = new SpeechSynthesisUtterance(currentCard.word)
+      utterance.lang = 'zh-CN'
+      window.speechSynthesis.cancel()
+      window.speechSynthesis.speak(utterance)
+    }
   }
 
   const handleRating = async (rating: Rating) => {
@@ -410,16 +444,16 @@ export function FlashcardReviewPage() {
                     </div>
                   ) : (
                     // Back of card - Word, Pronunciation, Meaning
-                    <div className="group h-96 relative">
-                      <div className="absolute inset-0 rounded-3xl border-2 border-[#d6c7b6] bg-gradient-to-br from-[#fff4e8] to-white shadow-2xl shadow-[#bf9f83]/20 p-8 flex flex-col items-center justify-center transform transition-transform">
+                    <div className="group w-full">
+                      <div className="rounded-3xl border-2 border-[#d6c7b6] bg-gradient-to-br from-[#fff4e8] to-white shadow-2xl shadow-[#bf9f83]/20 p-8 flex flex-col items-center justify-center transform transition-transform">
                         <div className="text-center w-full">
-                          <p className="mono text-xs uppercase tracking-[0.2em] text-[#8a7a6a] mb-4">
+                          {/* <p className="mono text-xs uppercase tracking-[0.2em] text-[#8a7a6a] mb-4">
                             Word
-                          </p>
+                          </p> */}
                           <p className="text-6xl font-bold text-[#d1451b] mb-3">
                             {currentCard?.word}
                           </p>
-                          <div className="mb-6 flex justify-center">
+                          <div className="flex justify-center">
                             <div className="relative inline-flex items-center">
                               <p className="text-2xl text-[#5e5349] font-medium">
                                 {showPinyin ? currentCard?.pinyin : '••••••'}
@@ -435,10 +469,22 @@ export function FlashcardReviewPage() {
                               </button>
                             </div>
                           </div>
+                          <div className="mb-6 mt-3 flex justify-center">
+                            <button
+                              type="button"
+                              onClick={speakWord}
+                              className="inline-flex items-center gap-1.5 rounded-lg border border-[#d6c7b6] bg-white px-3 py-1.5 text-sm font-medium text-[#75695f] shadow-sm transition hover:border-[#c4a882] hover:text-[#5e5349]"
+                              aria-label="Play pronunciation"
+                              title="Play pronunciation"
+                            >
+                              <SpeakerIcon />
+                              {/* Listen */}
+                            </button>
+                          </div>
 
-                          <p className="mb-2 text-sm font-medium text-[#8a7a6a]">
+                          {/* <p className="mb-2 text-sm font-medium text-[#8a7a6a]">
                             Current interval: {currentCard?.interval_days ?? 0} day{currentCard?.interval_days === 1 ? '' : 's'}
-                          </p>
+                          </p> */}
 
                           <div className="h-px bg-[#e6d5c3] my-6" />
 
