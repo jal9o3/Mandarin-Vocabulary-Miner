@@ -49,6 +49,55 @@ type AnalyzeLocationState = {
   }
 }
 
+type DrillItem = {
+  word: string
+  info: {
+    pronunciation?: string
+    meanings?: string[]
+  } | null
+}
+
+function PencilIcon() {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="h-4 w-4"
+      aria-hidden="true"
+    >
+      <path d="M12 20h9" />
+      <path d="m16.5 3.5 4 4L7 21H3v-4z" />
+    </svg>
+  )
+}
+
+function TrashIcon() {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="h-4 w-4"
+      aria-hidden="true"
+    >
+      <path d="M3 6h18" />
+      <path d="M8 6V4h8v2" />
+      <path d="M19 6l-1 14H6L5 6" />
+      <path d="M10 11v6" />
+      <path d="M14 11v6" />
+    </svg>
+  )
+}
+
 export function AnalyzePage() {
   const navigate = useNavigate()
   const location = useLocation()
@@ -60,6 +109,14 @@ export function AnalyzePage() {
   const [flashcardToast, setFlashcardToast] = useState<string | null>(null)
   const [hasSavedFlashcards, setHasSavedFlashcards] = useState(false)
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
+  const [drillItems, setDrillItems] = useState<DrillItem[]>([])
+  const [excludedDrillIndices, setExcludedDrillIndices] = useState<Set<number>>(new Set())
+  const [editingDrillIndex, setEditingDrillIndex] = useState<number | null>(null)
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+  const [editWord, setEditWord] = useState('')
+  const [editPronunciation, setEditPronunciation] = useState('')
+  const [editMeanings, setEditMeanings] = useState('')
+  const [editErrorMessage, setEditErrorMessage] = useState<string | null>(null)
   const priorityDrillSet = useMemo(
     () => {
       if (analysis?.priority_drill_set) {
@@ -83,25 +140,23 @@ export function AnalyzePage() {
   )
   const flashcardWords = useMemo(
     () => {
-      const infoByWord = new Map(
-        priorityDrillSet.map((item) => [item.word, item.info] as const),
-      )
-
-      return (analysis?.words ?? []).filter((row) => !row.is_known).map((row) => {
-        const info = infoByWord.get(row.word)
+      return drillItems
+        .filter((_item, index) => !excludedDrillIndices.has(index))
+        .map((item) => {
+        const info = item.info
         const meanings = Array.isArray(info?.meanings)
           ? info.meanings.map((meaning) => meaning.trim()).filter((meaning) => meaning.length > 0)
           : []
         const pronunciation = typeof info?.pronunciation === 'string' && info.pronunciation.trim().length > 0
           ? info.pronunciation.trim()
-          : row.pinyin
+          : ''
 
         return meanings.length > 0
-          ? { word: row.word, pinyin: pronunciation, meanings }
-          : { word: row.word, pinyin: pronunciation }
+          ? { word: item.word, pinyin: pronunciation, meanings }
+          : { word: item.word, pinyin: pronunciation }
       })
     },
-    [analysis, priorityDrillSet],
+    [drillItems, excludedDrillIndices],
   )
   const unknownWordSet = useMemo(() => new Set((analysis?.unknown_words ?? []).filter((word) => word.length > 0)), [analysis])
   const savedFlashcardWordSet = useMemo(
@@ -160,6 +215,94 @@ export function AnalyzePage() {
   useEffect(() => {
     setHasSavedFlashcards(false)
   }, [analysis?.cleaned_text])
+
+  useEffect(() => {
+    setDrillItems(
+      priorityDrillSet.map((item) => ({
+        word: item.word,
+        info: item.info
+          ? {
+            pronunciation: item.info.pronunciation,
+            meanings: item.info.meanings ? [...item.info.meanings] : undefined,
+          }
+          : null,
+      })),
+    )
+    setExcludedDrillIndices(new Set())
+    setEditingDrillIndex(null)
+    setIsEditModalOpen(false)
+    setEditErrorMessage(null)
+  }, [priorityDrillSet])
+
+  const handleToggleExcludeDrillItem = (index: number) => {
+    setExcludedDrillIndices((previous) => {
+      const next = new Set(previous)
+      if (next.has(index)) {
+        next.delete(index)
+      } else {
+        next.add(index)
+      }
+      return next
+    })
+    setHasSavedFlashcards(false)
+  }
+
+  const handleOpenEditModal = (index: number) => {
+    const item = drillItems[index]
+    if (!item) {
+      return
+    }
+
+    setEditingDrillIndex(index)
+    setEditWord(item.word)
+    setEditPronunciation(item.info?.pronunciation ?? '')
+    setEditMeanings((item.info?.meanings ?? []).join('; '))
+    setEditErrorMessage(null)
+    setIsEditModalOpen(true)
+  }
+
+  const handleCloseEditModal = () => {
+    setIsEditModalOpen(false)
+    setEditingDrillIndex(null)
+    setEditErrorMessage(null)
+  }
+
+  const handleSaveEditedDrillItem = () => {
+    if (editingDrillIndex === null) {
+      return
+    }
+
+    const nextWord = editWord.trim()
+    if (!nextWord) {
+      setEditErrorMessage('Word cannot be empty.')
+      return
+    }
+
+    const nextPronunciation = editPronunciation.trim()
+    const nextMeanings = editMeanings
+      .split(';')
+      .map((meaning) => meaning.trim())
+      .filter((meaning) => meaning.length > 0)
+      .filter((meaning, index, values) => values.indexOf(meaning) === index)
+
+    const nextInfo = nextPronunciation.length || nextMeanings.length
+      ? {
+        pronunciation: nextPronunciation.length ? nextPronunciation : undefined,
+        meanings: nextMeanings.length ? nextMeanings : undefined,
+      }
+      : null
+
+    setDrillItems((previous) => previous.map((item, index) => (
+      index === editingDrillIndex
+        ? {
+          word: nextWord,
+          info: nextInfo,
+        }
+        : item
+    )))
+    setHasSavedFlashcards(false)
+    handleCloseEditModal()
+  }
 
   if (!analysis) {
     return (
@@ -288,11 +431,44 @@ export function AnalyzePage() {
           </div>
 
           <div className="mt-6 rounded-xl border border-[#e6dbc9] bg-white p-5">
-            <h2 className="text-lg font-bold text-[#1b1714]">Priority drill set</h2>
+            <h2 className="text-lg font-bold text-[#1b1714]">New Extracted Words</h2>
             <div className="mt-3 grid gap-3">
-              {priorityDrillSet.map((item, index) => (
-                <article key={`${item.word}-${index}`} className="rounded-lg border border-[#f0e3d5] bg-[#fffbf4] p-3">
-                  <p className="text-sm font-bold text-[#8c2f11]">{item.word}</p>
+              {drillItems.map((item, index) => {
+                const isExcluded = excludedDrillIndices.has(index)
+
+                return (
+                <article
+                  key={`${item.word}-${index}`}
+                  className={`rounded-lg border p-3 ${isExcluded ? 'border-[#e8d8cb] bg-[#faf4ec] opacity-70' : 'border-[#f0e3d5] bg-[#fffbf4]'}`}
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-sm font-bold text-[#8c2f11]">{item.word}</p>
+                    <div className="flex items-center gap-2">
+                      {isExcluded ? (
+                        <span className="rounded-full bg-[#efe1d1] px-2 py-1 text-[10px] font-bold uppercase tracking-[0.08em] text-[#7c685a]">
+                          Excluded
+                        </span>
+                      ) : null}
+                      <button
+                        type="button"
+                        onClick={() => handleOpenEditModal(index)}
+                        className="inline-flex items-center justify-center rounded-md border border-[#d6c7b6] bg-[#fff8ef] p-2 text-[#5e5349] transition hover:border-[#bfa286] hover:bg-[#fff1df] hover:text-[#1b1714]"
+                        aria-label={`Edit ${item.word}`}
+                        title="Edit word"
+                      >
+                        <PencilIcon />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleToggleExcludeDrillItem(index)}
+                        className={`inline-flex items-center justify-center rounded-md border p-2 transition ${isExcluded ? 'border-[#d6c7b6] bg-[#fff8ef] text-[#5e5349] hover:border-[#bfa286] hover:bg-[#fff1df] hover:text-[#1b1714]' : 'border-[#e9b5b5] bg-[#fff0f0] text-[#c0392b] hover:border-[#dc8f8f] hover:bg-[#ffe3e3] hover:text-[#a12f24]'}`}
+                        aria-label={`${isExcluded ? 'Include' : 'Exclude'} ${item.word}`}
+                        title={isExcluded ? 'Include word' : 'Exclude word'}
+                      >
+                        <TrashIcon />
+                      </button>
+                    </div>
+                  </div>
                   <p className="mt-2 text-xs font-semibold uppercase tracking-[0.1em] text-[#8d7c6f]">Pronunciation</p>
                   <p className="mt-1 text-sm text-[#4b3f36]">{item.info?.pronunciation ?? 'N/A'}</p>
                   <p className="mt-2 text-xs font-semibold uppercase tracking-[0.1em] text-[#8d7c6f]">Meanings</p>
@@ -300,10 +476,11 @@ export function AnalyzePage() {
                     {(item.info?.meanings ?? []).length ? item.info?.meanings?.join('; ') : 'N/A'}
                   </p>
                 </article>
-              ))}
-              {!priorityDrillSet.length ? (
+                )
+              })}
+              {!drillItems.length ? (
                 <p className="rounded-lg bg-[var(--han-accent-soft)] px-3 py-2 text-sm font-semibold text-[#8c2f11]">
-                  Great job, no unknown words found
+                  No new words extracted.
                 </p>
               ) : null}
             </div>
@@ -370,6 +547,77 @@ export function AnalyzePage() {
             >
               Continue as guest
             </button> */}
+          </div>
+        </div>
+      ) : null}
+
+      {isEditModalOpen ? (
+        <div className="fixed inset-0 z-40 grid place-items-center bg-[#1b1714]/45 px-4">
+          <div className="relative w-full max-w-md rounded-2xl border border-[#d8ccbd] bg-white p-6 shadow-2xl">
+            <button
+              type="button"
+              aria-label="Close modal"
+              onClick={handleCloseEditModal}
+              className="absolute right-4 top-4 rounded-md px-2 py-1 text-sm font-bold text-[#5b4f46] transition hover:bg-[#faf6f0]"
+            >
+              x
+            </button>
+            <h2 className="text-2xl font-extrabold text-[#1b1714]">Edit Priority Word</h2>
+            <p className="mt-2 text-sm leading-relaxed text-[#66594f]">
+              Update this word before creating flashcards.
+            </p>
+
+            <div className="mt-5 space-y-3">
+              <label className="block">
+                <span className="text-xs font-semibold uppercase tracking-[0.08em] text-[#7c6e62]">Word</span>
+                <input
+                  type="text"
+                  value={editWord}
+                  onChange={(event) => setEditWord(event.target.value)}
+                  className="mt-1 w-full rounded-lg border border-[#d8ccbd] bg-white px-3 py-2 text-sm text-[#1b1714] outline-none ring-[#d1451b]/25 transition focus:ring"
+                />
+              </label>
+
+              <label className="block">
+                <span className="text-xs font-semibold uppercase tracking-[0.08em] text-[#7c6e62]">Pronunciation</span>
+                <input
+                  type="text"
+                  value={editPronunciation}
+                  onChange={(event) => setEditPronunciation(event.target.value)}
+                  className="mt-1 w-full rounded-lg border border-[#d8ccbd] bg-white px-3 py-2 text-sm text-[#1b1714] outline-none ring-[#d1451b]/25 transition focus:ring"
+                />
+              </label>
+
+              <label className="block">
+                <span className="text-xs font-semibold uppercase tracking-[0.08em] text-[#7c6e62]">Meanings</span>
+                <textarea
+                  value={editMeanings}
+                  onChange={(event) => setEditMeanings(event.target.value)}
+                  rows={3}
+                  placeholder="Use semicolons to separate meanings"
+                  className="mt-1 w-full rounded-lg border border-[#d8ccbd] bg-white px-3 py-2 text-sm text-[#1b1714] outline-none ring-[#d1451b]/25 transition focus:ring"
+                />
+              </label>
+            </div>
+
+            {editErrorMessage ? <p className="mt-3 text-sm font-semibold text-[#b42020]">{editErrorMessage}</p> : null}
+
+            <div className="mt-5 grid gap-2 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={handleSaveEditedDrillItem}
+                className="rounded-xl bg-[#d1451b] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#b63e19]"
+              >
+                Save changes
+              </button>
+              <button
+                type="button"
+                onClick={handleCloseEditModal}
+                className="rounded-xl border border-[#1b1714] bg-white px-4 py-3 text-sm font-semibold transition hover:bg-[#faf6f0]"
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       ) : null}
