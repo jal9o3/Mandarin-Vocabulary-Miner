@@ -416,6 +416,24 @@ def analyze_text(text: str, vocab_text: str, saved_flashcard_words: set[str] | N
     }
 
 
+def compute_text_hsk_level(text: str) -> int:
+    """Return the highest (most advanced) HSK level found among tokens in *text*."""
+    cleaned = remove_punctuation(text or "")
+    if not cleaned.strip():
+        return 1
+
+    max_level = 1
+    for word in jieba.cut(cleaned):
+        word = word.strip()
+        if not word:
+            continue
+        level = _estimate_hsk_level(word)
+        if level > max_level:
+            max_level = level
+
+    return max_level
+
+
 def resolve_word_flashcard_info(word: str) -> dict:
     normalized_word = word.strip()
     if not normalized_word:

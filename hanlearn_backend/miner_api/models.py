@@ -37,6 +37,7 @@ class SavedText(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="saved_texts")
     title = models.CharField(max_length=256, blank=True, default="")
     content = models.TextField()
+    hsk_level = models.PositiveSmallIntegerField(default=1)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

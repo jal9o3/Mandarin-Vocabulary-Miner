@@ -11,7 +11,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_http_methods
 
 from .models import SavedText, UserFlashcard, Word
-from .services import analyze_text, build_vocab_screen, load_vocab, parse_vocab_text, resolve_word_flashcard_info, save_vocab
+from .services import analyze_text, build_vocab_screen, compute_text_hsk_level, load_vocab, parse_vocab_text, resolve_word_flashcard_info, save_vocab
 
 
 VOCAB_FILE = settings.BASE_DIR / "vocab.txt"
@@ -538,7 +538,7 @@ def library_view(request: HttpRequest) -> JsonResponse:
 
     texts = SavedText.objects.filter(user=request.user)
     rows = [
-        {"id": t.id, "title": t.title, "content": t.content, "created_at": t.created_at.isoformat()}
+        {"id": t.id, "title": t.title, "content": t.content, "hsk_level": t.hsk_level, "created_at": t.created_at.isoformat()}
         for t in texts
     ]
     return JsonResponse({"texts": rows})
@@ -560,13 +560,17 @@ def save_text_view(request: HttpRequest) -> JsonResponse:
     if not isinstance(title, str):
         title = ""
 
+    clean_content = content.strip()
+    hsk_level = compute_text_hsk_level(clean_content)
+
     saved = SavedText.objects.create(
         user=request.user,
         title=title.strip(),
-        content=content.strip(),
+        content=clean_content,
+        hsk_level=hsk_level,
     )
     return JsonResponse(
-        {"id": saved.id, "title": saved.title, "content": saved.content, "created_at": saved.created_at.isoformat()},
+        {"id": saved.id, "title": saved.title, "content": saved.content, "hsk_level": saved.hsk_level, "created_at": saved.created_at.isoformat()},
         status=201,
     )
 
