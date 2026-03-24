@@ -1,37 +1,54 @@
-import { Link } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 
-type PlaceholderText = {
-  id: string
-  name: string
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? ''
+
+type SavedText = {
+  id: number
+  title: string
+  content: string
+  created_at: string
 }
-
-type HskShelf = {
-  level: string
-  texts: PlaceholderText[]
-}
-
-const HSK_SHELVES: HskShelf[] = [
-  { level: 'HSK 1', texts: [] },
-  { level: 'HSK 2', texts: [] },
-  { level: 'HSK 3', texts: [] },
-  { level: 'HSK 4', texts: [] },
-  { level: 'HSK 5', texts: [] },
-  { level: 'HSK 6', texts: [] },
-  { level: 'HSK 7', texts: [] },
-  { level: 'HSK 8', texts: [] },
-  { level: 'HSK 9', texts: [] },
-]
 
 export function LibraryPage() {
+  const navigate = useNavigate()
+  const [texts, setTexts] = useState<SavedText[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const meRes = await fetch(`${API_BASE_URL}/api/auth/me`, { credentials: 'include' })
+        if (!meRes.ok) { setIsLoading(false); return }
+        const me = (await meRes.json()) as { is_authenticated?: boolean }
+        if (!me.is_authenticated) { setIsLoading(false); return }
+        setIsAuthenticated(true)
+
+        const libRes = await fetch(`${API_BASE_URL}/api/library`, { credentials: 'include' })
+        if (!libRes.ok) { setIsLoading(false); return }
+        const payload = (await libRes.json()) as { texts?: SavedText[] }
+        setTexts(payload.texts ?? [])
+      } finally {
+        setIsLoading(false)
+      }
+    }
+    void load()
+  }, [])
+
+  const handleOpen = (text: SavedText) => {
+    navigate('/paste', { state: { prefillText: text.content } })
+  }
+
   return (
     <main className="mx-auto min-h-screen w-full max-w-6xl px-6 py-10 sm:px-10 lg:px-12">
       <section className="rounded-2xl border border-[#d6c7b6] bg-[var(--han-panel)] p-6 shadow-xl shadow-[#bf9f83]/15 sm:p-8">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="mono text-xs uppercase tracking-[0.2em] text-[#8d7c6f]">Library</p>
-            <h1 className="mt-2 text-3xl font-extrabold text-[#1b1714]">HSK Text Shelf</h1>
+            <h1 className="mt-2 text-3xl font-extrabold text-[#1b1714]">Saved Texts</h1>
             <p className="mt-3 max-w-2xl text-sm leading-relaxed text-[#66594f]">
-              Each row is an HSK level. Vertical cards represent saved texts. These are placeholder entries for now.
+              Texts you've saved from the analyzer. Click a card to re-open it for analysis.
             </p>
           </div>
           <Link
@@ -42,40 +59,43 @@ export function LibraryPage() {
           </Link>
         </div>
 
-        <div className="mt-8 space-y-6">
-          {HSK_SHELVES.map((shelf) => (
-            <article key={shelf.level} className="rounded-xl border border-[#e4d7c5] bg-[#fff8ef] p-4 sm:p-5">
-              <div className="flex items-center justify-between gap-3">
-                <h2 className="text-lg font-bold text-[#2f261f]">{shelf.level}</h2>
-                <span className="mono text-xs uppercase tracking-[0.15em] text-[#8f7f6f]">{shelf.texts.length} Texts</span>
-              </div>
-
-              <div className="mt-4 flex gap-3 overflow-x-auto pb-2">
-                {shelf.texts.length === 0 ? (
-                  <div className="flex h-32 w-full items-center justify-center rounded-lg border border-dashed border-[#d8cab8] bg-[#fffdf9] px-6 text-center sm:h-36">
-                    <p className="max-w-xl text-sm font-semibold leading-relaxed text-[#66594f]">
-                      Upload texts to the miner to fill shelves.
-                    </p>
-                  </div>
-                ) : (
-                  shelf.texts.map((text) => (
-                    <div key={text.id} className="w-24 shrink-0 sm:w-28">
-                      <button
-                        type="button"
-                        className="group flex w-full flex-col items-center"
-                        aria-label={`Library text card for ${text.name}`}
-                      >
-                        <div className="h-32 w-full rounded-lg border border-[#d8cab8] bg-gradient-to-b from-[#fff9f0] via-[#f6e7d5] to-[#efd8bf] shadow-sm transition group-hover:-translate-y-0.5 group-hover:shadow-md sm:h-36" />
-                        <p className="mt-2 line-clamp-2 text-center text-xs font-semibold leading-tight text-[#4a3e35]">
-                          {text.name}
-                        </p>
-                      </button>
-                    </div>
-                  ))
-                )}
-              </div>
-            </article>
-          ))}
+        <div className="mt-8">
+          {isLoading ? (
+            <p className="text-sm text-[#8d7c6f]">Loading…</p>
+          ) : !isAuthenticated ? (
+            <div className="rounded-xl border border-dashed border-[#d8cab8] bg-[#fffdf9] p-8 text-center">
+              <p className="text-sm font-semibold text-[#66594f]">
+                <Link to="/account?mode=login" className="text-[#d1451b] hover:underline">Sign in</Link> to view your saved texts.
+              </p>
+            </div>
+          ) : texts.length === 0 ? (
+            <div className="flex h-40 items-center justify-center rounded-xl border border-dashed border-[#d8cab8] bg-[#fffdf9] px-6 text-center">
+              <p className="max-w-sm text-sm font-semibold leading-relaxed text-[#66594f]">
+                No saved texts yet. Use the heart icon on the Analyze page to save a text here.
+              </p>
+            </div>
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {texts.map((text) => (
+                <button
+                  key={text.id}
+                  type="button"
+                  onClick={() => handleOpen(text)}
+                  className="group rounded-xl border border-[#e4d7c5] bg-[#fff8ef] p-4 text-left transition hover:border-[#c4a882] hover:shadow-md"
+                >
+                  <p className="line-clamp-2 text-sm font-bold text-[#2f261f] group-hover:text-[#d1451b]">
+                    {text.title || text.content.slice(0, 60)}
+                  </p>
+                  <p className="mt-2 line-clamp-3 text-xs leading-relaxed text-[#66594f]">
+                    {text.content}
+                  </p>
+                  <p className="mt-3 text-[10px] uppercase tracking-[0.12em] text-[#a09080]">
+                    {new Date(text.created_at).toLocaleDateString()}
+                  </p>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </section>
     </main>

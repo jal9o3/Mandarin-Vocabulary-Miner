@@ -10,7 +10,7 @@ from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_http_methods
 
-from .models import UserFlashcard, Word
+from .models import SavedText, UserFlashcard, Word
 from .services import analyze_text, build_vocab_screen, load_vocab, parse_vocab_text, resolve_word_flashcard_info, save_vocab
 
 
@@ -529,3 +529,58 @@ def review_flashcard_view(request: HttpRequest, flashcard_id: int) -> JsonRespon
 
     due_remaining = UserFlashcard.objects.filter(user=request.user, due_at__lte=timezone.now()).count()
     return JsonResponse({"flashcard": _serialize_flashcard(flashcard), "due_remaining": due_remaining})
+
+
+@require_GET
+def library_view(request: HttpRequest) -> JsonResponse:
+    if not request.user.is_authenticated:
+        return JsonResponse({"error": "Sign in to view your library."}, status=401)
+
+    texts = SavedText.objects.filter(user=request.user)
+    rows = [
+        {"id": t.id, "title": t.title, "content": t.content, "created_at": t.created_at.isoformat()}
+        for t in texts
+    ]
+    return JsonResponse({"texts": rows})
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def save_text_view(request: HttpRequest) -> JsonResponse:
+    if not request.user.is_authenticated:
+        return JsonResponse({"error": "Sign in to save texts to your library."}, status=401)
+
+    payload = _json_body(request)
+    content = payload.get("content", "")
+    title = payload.get("title", "")
+
+    if not isinstance(content, str) or not content.strip():
+        return JsonResponse({"error": "Provide non-empty 'content' as a string."}, status=400)
+
+    if not isinstance(title, str):
+        title = ""
+
+    saved = SavedText.objects.create(
+        user=request.user,
+        title=title.strip(),
+        content=content.strip(),
+    )
+    return JsonResponse(
+        {"id": saved.id, "title": saved.title, "content": saved.content, "created_at": saved.created_at.isoformat()},
+        status=201,
+    )
+
+
+@csrf_exempt
+@require_http_methods(["DELETE"])
+def delete_saved_text_view(request: HttpRequest, text_id: int) -> JsonResponse:
+    if not request.user.is_authenticated:
+        return JsonResponse({"error": "Sign in to manage your library."}, status=401)
+
+    try:
+        saved = SavedText.objects.get(id=text_id, user=request.user)
+    except SavedText.DoesNotExist:
+        return JsonResponse({"error": "Text not found."}, status=404)
+
+    saved.delete()
+    return JsonResponse({"deleted": True, "id": text_id})
