@@ -16,7 +16,7 @@ export function LandingPage() {
               Turn any Mandarin passage into a focused drill plan.
             </h1>
             <p className="reveal delay-2 max-w-2xl text-lg leading-relaxed text-[#5e5349]">
-              Paste text or upload a document. Hanlearn compares every word against your personal vocabulary bank,
+              Paste text. Hanlearn compares every word against your personal vocabulary bank,
               then pinpoints exactly what needs review before the passage becomes genuinely comprehensible.
             </p>
 
