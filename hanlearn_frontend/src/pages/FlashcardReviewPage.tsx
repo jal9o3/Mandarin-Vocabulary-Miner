@@ -758,9 +758,6 @@ export function FlashcardReviewPage() {
                 <div className="mb-6">
                   <h1 className="text-3xl font-bold text-[#1b1714]">All Flashcards</h1>
                   <div className="mt-2 flex flex-wrap items-center gap-3">
-                    <p className="text-sm text-[#75695f]">
-                      {allCards.length} card{allCards.length === 1 ? '' : 's'} total
-                    </p>
                     <button
                       type="button"
                       onClick={() => void handleExportCsv()}
@@ -769,6 +766,9 @@ export function FlashcardReviewPage() {
                     >
                       {isExportingCsv ? 'Exporting...' : 'Export CSV'}
                     </button>
+                    <p className="text-sm text-[#75695f]">
+                      {allCards.length} card{allCards.length === 1 ? '' : 's'} total
+                    </p>
                   </div>
                 </div>
                 <div className="overflow-x-auto rounded-2xl border border-[#d6c7b6] bg-white shadow-lg shadow-[#bf9f83]/10">
