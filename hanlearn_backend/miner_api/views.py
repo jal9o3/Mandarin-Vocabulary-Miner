@@ -1,11 +1,13 @@
 import json
+import csv
+import io
 from datetime import timedelta
 
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.models import User
 from django.conf import settings
 from django.db import transaction
-from django.http import HttpRequest, JsonResponse
+from django.http import HttpRequest, JsonResponse, HttpResponse
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_http_methods
@@ -421,6 +423,32 @@ def flashcards_view(request: HttpRequest) -> JsonResponse:
     due_count = UserFlashcard.objects.filter(user=request.user, due_at__lte=now).count()
 
     return JsonResponse({"flashcards": rows, "total": total_count, "due": due_count, "due_only": due_only})
+
+
+@require_GET
+def export_flashcards_csv_view(request: HttpRequest) -> HttpResponse:
+    if not request.user.is_authenticated:
+        return JsonResponse({"error": "Create an account or sign in to export flashcards."}, status=401)
+
+    flashcards = (
+        UserFlashcard.objects.filter(user=request.user)
+        .select_related("word")
+        .order_by("word__text", "id")
+    )
+
+    buffer = io.StringIO()
+    writer = csv.writer(buffer)
+    writer.writerow(["Front", "Back"])
+
+    for flashcard in flashcards:
+        pinyin = flashcard.word.pinyin.strip()
+        meaning = flashcard.meaning.strip()
+        back = f"{pinyin}\n{meaning}" if pinyin else meaning
+        writer.writerow([flashcard.word.text, back])
+
+    response = HttpResponse(buffer.getvalue(), content_type="text/csv; charset=utf-8")
+    response["Content-Disposition"] = 'attachment; filename="hanlearn-flashcards.csv"'
+    return response
 
 
 @csrf_exempt

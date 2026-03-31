@@ -1,3 +1,5 @@
+import csv
+import io
 import json
 import tempfile
 from datetime import timedelta
@@ -322,6 +324,43 @@ class MinerApiTests(TestCase):
         self.assertTrue(data["due_only"])
         self.assertEqual(len(data["flashcards"]), 1)
         self.assertEqual(data["flashcards"][0]["word"], "你好")
+
+    def test_export_flashcards_csv_requires_authentication(self):
+        response = self.client.get("/api/flashcards/export")
+
+        self.assertEqual(response.status_code, 401)
+        self.assertIn("error", response.json())
+
+    def test_export_flashcards_csv_returns_anki_compatible_rows(self):
+        user = User.objects.create_user(username="exporter", password="TopSecret123")
+        other_user = User.objects.create_user(username="other", password="TopSecret123")
+        self.client.force_login(user)
+
+        nihao = Word.objects.create(text="你好", pinyin="ni3 hao3")
+        zaijian = Word.objects.create(text="再见", pinyin="")
+        xiexie = Word.objects.create(text="谢谢", pinyin="xie4 xie")
+
+        UserFlashcard.objects.create(user=user, word=nihao, meaning="hello")
+        UserFlashcard.objects.create(user=user, word=zaijian, meaning="goodbye")
+        UserFlashcard.objects.create(user=user, word=xiexie, meaning="thank you")
+        UserFlashcard.objects.create(user=other_user, word=Word.objects.create(text="苹果", pinyin="ping2 guo3"), meaning="apple")
+
+        response = self.client.get("/api/flashcards/export")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "text/csv; charset=utf-8")
+        self.assertIn("attachment; filename=\"hanlearn-flashcards.csv\"", response["Content-Disposition"])
+
+        content = response.content.decode("utf-8")
+        parsed_rows = list(csv.reader(io.StringIO(content)))
+
+        self.assertEqual(parsed_rows[0], ["Front", "Back"])
+        self.assertEqual(len(parsed_rows), 4)
+
+        exported = {(front, back) for front, back in parsed_rows[1:]}
+        self.assertIn(("你好", "ni3 hao3\nhello"), exported)
+        self.assertIn(("再见", "goodbye"), exported)
+        self.assertIn(("谢谢", "xie4 xie\nthank you"), exported)
 
     def test_review_flashcard_again_resets_card_to_learning(self):
         user = User.objects.create_user(username="frank", password="TopSecret123")

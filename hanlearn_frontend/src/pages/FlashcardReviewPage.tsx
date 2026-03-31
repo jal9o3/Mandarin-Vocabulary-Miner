@@ -172,6 +172,7 @@ export function FlashcardReviewPage() {
   const [editMeaning, setEditMeaning] = useState('')
   const [isSavingEdit, setIsSavingEdit] = useState(false)
   const [deletingCardId, setDeletingCardId] = useState<number | null>(null)
+  const [isExportingCsv, setIsExportingCsv] = useState(false)
 
   const hasCards = cards.length > 0
   const currentCard = hasCards ? cards[0] : null
@@ -400,6 +401,56 @@ export function FlashcardReviewPage() {
       setErrorMessage(message)
     } finally {
       setDeletingCardId(null)
+    }
+  }
+
+  const handleExportCsv = async () => {
+    setIsExportingCsv(true)
+    setErrorMessage(null)
+
+    try {
+      const response = await fetch(buildApiUrl('/api/flashcards/export'), {
+        method: 'GET',
+        credentials: 'include',
+      })
+
+      if (!response.ok) {
+        let message = 'Failed to export flashcards.'
+        const contentType = response.headers.get('content-type') ?? ''
+
+        if (contentType.includes('application/json')) {
+          const payload = await response.json() as { error?: unknown }
+          if (typeof payload.error === 'string') {
+            message = payload.error
+          }
+        } else {
+          const text = (await response.text()).trim()
+          if (text) {
+            message = text
+          }
+        }
+
+        throw new Error(message)
+      }
+
+      const blob = await response.blob()
+      const disposition = response.headers.get('content-disposition') ?? ''
+      const filenameMatch = disposition.match(/filename="?([^";]+)"?/i)
+      const filename = filenameMatch?.[1] ?? 'hanlearn-flashcards.csv'
+
+      const objectUrl = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = objectUrl
+      link.download = filename
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(objectUrl)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unexpected error while exporting flashcards.'
+      setErrorMessage(message)
+    } finally {
+      setIsExportingCsv(false)
     }
   }
 
@@ -706,9 +757,19 @@ export function FlashcardReviewPage() {
               <>
                 <div className="mb-6">
                   <h1 className="text-3xl font-bold text-[#1b1714]">All Flashcards</h1>
-                  <p className="mt-1 text-sm text-[#75695f]">
-                    {allCards.length} card{allCards.length === 1 ? '' : 's'} total
-                  </p>
+                  <div className="mt-2 flex flex-wrap items-center gap-3">
+                    <p className="text-sm text-[#75695f]">
+                      {allCards.length} card{allCards.length === 1 ? '' : 's'} total
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => void handleExportCsv()}
+                      disabled={isExportingCsv}
+                      className="rounded-lg bg-[#d1451b] px-4 py-2 font-semibold text-white transition hover:bg-[#b63e19] disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {isExportingCsv ? 'Exporting...' : 'Export CSV'}
+                    </button>
+                  </div>
                 </div>
                 <div className="overflow-x-auto rounded-2xl border border-[#d6c7b6] bg-white shadow-lg shadow-[#bf9f83]/10">
                   <table className="w-full text-sm">
