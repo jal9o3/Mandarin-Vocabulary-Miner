@@ -8,6 +8,21 @@
   --han-muted: #62564c;
   --han-accent: #d1451b;
   --han-accent-soft: #ffd6b8;
+  --han-bg-grad-start: #fff4e4;
+  --han-bg-grad-mid: #f7f2ea;
+  --han-bg-grad-end: #ece3d6;
+}
+
+:root[data-theme='dark'] {
+  --han-bg: #130f0c;
+  --han-panel: #1f1915;
+  --han-ink: #f2e6db;
+  --han-muted: #c6b6a8;
+  --han-accent: #f06d42;
+  --han-accent-soft: #5f2f1f;
+  --han-bg-grad-start: #1c1511;
+  --han-bg-grad-mid: #130f0c;
+  --han-bg-grad-end: #090706;
 }
 
 * {
@@ -24,7 +39,13 @@ body {
   margin: 0;
   font-family: 'Manrope', sans-serif;
   color: var(--han-ink);
-  background: radial-gradient(circle at 15% 15%, #fff4e4 0%, #f7f2ea 55%, #ece3d6 100%);
+  background: radial-gradient(
+    circle at 15% 15%,
+    var(--han-bg-grad-start) 0%,
+    var(--han-bg-grad-mid) 55%,
+    var(--han-bg-grad-end) 100%
+  );
+  transition: background 220ms ease, color 220ms ease;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -60,4 +81,84 @@ body {
 
 .delay-3 {
   animation-delay: 0.24s;
+}
+
+:root[data-theme='dark'] .text-\[\#1b1714\],
+:root[data-theme='dark'] .text-\[\#2b211b\],
+:root[data-theme='dark'] .text-\[\#2d2118\],
+:root[data-theme='dark'] .text-\[\#2d241d\],
+:root[data-theme='dark'] .text-\[\#2f261f\],
+:root[data-theme='dark'] .text-\[\#4e4138\],
+:root[data-theme='dark'] .text-\[\#4c423a\],
+:root[data-theme='dark'] .text-\[\#4b3f36\],
+:root[data-theme='dark'] .text-\[\#5d4a3a\],
+:root[data-theme='dark'] .text-\[\#5e5349\],
+:root[data-theme='dark'] .text-\[\#5b4f46\],
+:root[data-theme='dark'] .text-\[\#644f3f\],
+:root[data-theme='dark'] .text-\[\#65594f\],
+:root[data-theme='dark'] .text-\[\#66594f\],
+:root[data-theme='dark'] .text-\[\#75695f\],
+:root[data-theme='dark'] .text-\[\#7a6c60\],
+:root[data-theme='dark'] .text-\[\#7c6e62\],
+:root[data-theme='dark'] .text-\[\#8a7a6a\],
+:root[data-theme='dark'] .text-\[\#8d7c6f\],
+:root[data-theme='dark'] .text-\[\#8f7f6f\],
+:root[data-theme='dark'] .text-\[\#a09080\] {
+  color: var(--han-ink) !important;
+}
+
+:root[data-theme='dark'] .placeholder\:text-\[\#a28d79\]::placeholder {
+  color: var(--han-muted) !important;
+}
+
+:root[data-theme='dark'] .text-\[\#8c2f11\] {
+  color: #ffd3c3 !important;
+}
+
+:root[data-theme='dark'] .text-\[\#7c685a\] {
+  color: #dccdc0 !important;
+}
+
+:root[data-theme='dark'] .bg-white,
+:root[data-theme='dark'] .bg-white\/70,
+:root[data-theme='dark'] .bg-white\/80,
+:root[data-theme='dark'] .bg-\[\#fffdf9\],
+:root[data-theme='dark'] .bg-\[\#fffdf8\],
+:root[data-theme='dark'] .bg-\[\#fffaf3\],
+:root[data-theme='dark'] .bg-\[\#fffaf2\],
+:root[data-theme='dark'] .bg-\[\#fffbf4\],
+:root[data-theme='dark'] .bg-\[\#fff9f2\],
+:root[data-theme='dark'] .bg-\[\#fff8ef\],
+:root[data-theme='dark'] .bg-\[\#fff8ee\],
+:root[data-theme='dark'] .bg-\[\#fff7ef\],
+:root[data-theme='dark'] .bg-\[\#fff4e8\],
+:root[data-theme='dark'] .bg-\[\#fff3e8\],
+:root[data-theme='dark'] .bg-\[\#fff1e5\],
+:root[data-theme='dark'] .bg-\[\#fff0e8\],
+:root[data-theme='dark'] .bg-\[\#faf6f0\],
+:root[data-theme='dark'] .bg-\[\#faf5ef\],
+:root[data-theme='dark'] .bg-\[\#fdfaf6\],
+:root[data-theme='dark'] .bg-\[\#fdf8f2\],
+:root[data-theme='dark'] .bg-\[\#faf4ec\] {
+  background-color: var(--han-panel) !important;
+}
+
+:root[data-theme='dark'] .border-\[\#f0e6d8\],
+:root[data-theme='dark'] .border-\[\#efe3d4\],
+:root[data-theme='dark'] .border-\[\#ede3d6\],
+:root[data-theme='dark'] .border-\[\#eadfce\],
+:root[data-theme='dark'] .border-\[\#e9b5b5\],
+:root[data-theme='dark'] .border-\[\#e8d8cb\],
+:root[data-theme='dark'] .border-\[\#e6dbc9\],
+:root[data-theme='dark'] .border-\[\#e6d5c3\],
+:root[data-theme='dark'] .border-\[\#e4d7c5\],
+:root[data-theme='dark'] .border-\[\#e0d3c1\],
+:root[data-theme='dark'] .border-\[\#d8ccbd\],
+:root[data-theme='dark'] .border-\[\#d8cab8\],
+:root[data-theme='dark'] .border-\[\#d6c7b6\],
+:root[data-theme='dark'] .border-\[\#d3b89e\],
+:root[data-theme='dark'] .border-\[\#c9b39b\],
+:root[data-theme='dark'] .border-\[\#bfa286\],
+:root[data-theme='dark'] .border-\[\#1b1714\] {
+  border-color: #4b3f35 !important;
 }

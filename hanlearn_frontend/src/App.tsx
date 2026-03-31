@@ -11,6 +11,22 @@ import { FlashcardReviewPage } from './pages/FlashcardReviewPage'
 import { NavHeader } from './components/NavHeader'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? ''
+const THEME_STORAGE_KEY = 'hanlearn-theme'
+
+type Theme = 'light' | 'dark'
+
+function getInitialTheme(): Theme {
+  if (typeof window === 'undefined') {
+    return 'light'
+  }
+
+  const storedTheme = window.localStorage.getItem(THEME_STORAGE_KEY)
+  if (storedTheme === 'light' || storedTheme === 'dark') {
+    return storedTheme
+  }
+
+  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+}
 
 function RootEntryPage() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null)
@@ -45,9 +61,19 @@ function RootEntryPage() {
 }
 
 function App() {
+  const [theme, setTheme] = useState<Theme>(getInitialTheme)
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme)
+    window.localStorage.setItem(THEME_STORAGE_KEY, theme)
+  }, [theme])
+
   return (
     <>
-      <NavHeader />
+      <NavHeader
+        isDarkMode={theme === 'dark'}
+        onToggleDarkMode={() => setTheme((current) => (current === 'dark' ? 'light' : 'dark'))}
+      />
       <Routes>
         <Route path="/" element={<RootEntryPage />} />
         <Route path="/landing" element={<LandingPage />} />
