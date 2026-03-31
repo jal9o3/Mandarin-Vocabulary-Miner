@@ -162,3 +162,63 @@ body {
 :root[data-theme='dark'] .border-\[\#1b1714\] {
   border-color: #4b3f35 !important;
 }
+
+:root[data-theme='dark'] .flashcard-view {
+  background-image: linear-gradient(135deg, #18120f 0%, #100d0b 100%) !important;
+}
+
+:root[data-theme='dark'] .flashcard-view .bg-\[\#f6aa72\]\/15 {
+  background-color: rgb(240 109 66 / 18%) !important;
+}
+
+:root[data-theme='dark'] .flashcard-view .bg-\[\#d1451b\]\/10 {
+  background-color: rgb(240 109 66 / 14%) !important;
+}
+
+:root[data-theme='dark'] .flashcard-view .bg-\[\#e6d5c3\] {
+  background-color: #3a3028 !important;
+}
+
+:root[data-theme='dark'] .flashcard-view .bg-gradient-to-br.from-\[\#fff4e8\].to-white {
+  background-image: linear-gradient(135deg, #2a221d 0%, #1f1915 100%) !important;
+}
+
+:root[data-theme='dark'] .flashcard-view .bg-\[\#faf5ef\] {
+  background-color: #2a221d !important;
+}
+
+:root[data-theme='dark'] .flashcard-view .bg-\[\#fdfaf6\] {
+  background-color: #1e1814 !important;
+}
+
+:root[data-theme='dark'] .flashcard-view .hover\:bg-\[\#fdf8f2\]:hover {
+  background-color: #2a221d !important;
+}
+
+:root[data-theme='dark'] .flashcard-view .bg-\[\#ffeded\] {
+  background-color: #482721 !important;
+}
+
+:root[data-theme='dark'] .flashcard-view .text-\[\#c0392b\] {
+  color: #ffc5b8 !important;
+}
+
+:root[data-theme='dark'] .flashcard-view .bg-\[\#edf6e8\] {
+  background-color: #243524 !important;
+}
+
+:root[data-theme='dark'] .flashcard-view .text-\[\#3a7d44\] {
+  color: #c8f0c8 !important;
+}
+
+:root[data-theme='dark'] .flashcard-view .bg-\[\#fff0f0\] {
+  background-color: #3b221d !important;
+}
+
+:root[data-theme='dark'] .flashcard-view .hover\:bg-\[\#ffe3e3\]:hover {
+  background-color: #523028 !important;
+}
+
+:root[data-theme='dark'] .flashcard-view .text-\[\#a12f24\] {
+  color: #ffcec3 !important;
+}
