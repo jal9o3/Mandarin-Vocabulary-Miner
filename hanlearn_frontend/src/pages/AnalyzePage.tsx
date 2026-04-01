@@ -238,6 +238,14 @@ export function AnalyzePage() {
   }, [analysis?.cleaned_text])
 
   useEffect(() => {
+    if (!analysis) {
+      return
+    }
+
+    window.scrollTo({ top: 0, behavior: 'auto' })
+  }, [analysis])
+
+  useEffect(() => {
     setDrillItems(
       priorityDrillSet.map((item) => ({
         word: item.word,
