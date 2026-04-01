@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
-import { BookOpen, LogIn, Menu, Moon, Pickaxe, Sun, UserPlus, UserRound, WalletCards, X } from 'lucide-react'
+import { BookOpen, LogIn, LogOut, Menu, Moon, Pickaxe, Settings, Sun, UserPlus, UserRound, WalletCards, X } from 'lucide-react'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? ''
 
@@ -233,7 +233,10 @@ export function NavHeader({ isDarkMode, onToggleDarkMode }: NavHeaderProps) {
                   onClick={openSettings}
                   className={profileSettingsClasses}
                 >
-                  Settings
+                  <span className="flex items-center gap-2">
+                    <Settings size={15} aria-hidden="true" />
+                    Settings
+                  </span>
                 </button>
                 {isAuthenticated ? (
                   <button
@@ -242,7 +245,10 @@ export function NavHeader({ isDarkMode, onToggleDarkMode }: NavHeaderProps) {
                     onClick={handleLogout}
                     className={profileLogoutClasses}
                   >
-                    Log Out
+                    <span className="flex items-center gap-2">
+                      <LogOut size={15} aria-hidden="true" />
+                      Log Out
+                    </span>
                   </button>
                 ) : null}
               </div>
@@ -404,7 +410,10 @@ export function NavHeader({ isDarkMode, onToggleDarkMode }: NavHeaderProps) {
                     onClick={openSettings}
                     className={profileSettingsClasses}
                   >
-                    Settings
+                    <span className="flex items-center gap-2">
+                      <Settings size={15} aria-hidden="true" />
+                      Settings
+                    </span>
                   </button>
                   {isAuthenticated ? (
                     <button
@@ -413,7 +422,10 @@ export function NavHeader({ isDarkMode, onToggleDarkMode }: NavHeaderProps) {
                       onClick={handleLogout}
                       className={profileLogoutClasses}
                     >
-                      Log Out
+                      <span className="flex items-center gap-2">
+                        <LogOut size={15} aria-hidden="true" />
+                        Log Out
+                      </span>
                     </button>
                   ) : null}
                 </div>
