@@ -178,7 +178,6 @@ export function FlashcardReviewPage() {
   const currentCard = hasCards ? cards[0] : null
   const remainingCards = cards.length
   const reviewedCards = Math.max(0, initialDueCount - remainingCards)
-  const progressWidth = initialDueCount > 0 ? (reviewedCards / initialDueCount) * 100 : 0
 
   const loadFlashcards = useCallback(async (showCompletionOnEmpty = false) => {
     setIsLoading(true)
@@ -592,21 +591,10 @@ export function FlashcardReviewPage() {
               // Flashcard content
               <>
                 {/* Header */}
-                <div className="mb-12 flex items-center justify-between">
-                  <div>
-                    <h1 className="text-3xl font-bold text-[#1b1714]">Review Flashcards</h1>
-                    <p className="mt-1 text-sm text-[#75695f]">
-                      {remainingCards} due now out of {totalFlashcards} saved
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <div className="h-3 w-48 rounded-full bg-[#e6d5c3] overflow-hidden">
-                      <div
-                        className="h-full bg-[#d1451b] transition-all duration-300"
-                        style={{ width: `${progressWidth}%` }}
-                      />
-                    </div>
-                  </div>
+                <div className="mb-12">
+                  <p className="text-sm text-[#75695f]">
+                    {Math.min(initialDueCount, reviewedCards + 1)} out of {initialDueCount}
+                  </p>
                 </div>
 
                 {/* Flashcard Container */}
