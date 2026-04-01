@@ -196,6 +196,80 @@ class MinerApiTests(TestCase):
         self.assertEqual(response.status_code, 201)
         self.assertTrue(User.objects.filter(username="alice").exists())
 
+    def test_update_username_requires_authentication(self):
+        response = self.client.post(
+            "/api/auth/username",
+            data=json.dumps({"new_username": "alice2", "current_password": "StrongPass123"}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 401)
+        self.assertIn("error", response.json())
+
+    def test_update_username_changes_username_when_password_is_valid(self):
+        user = User.objects.create_user(username="alice", password="StrongPass123")
+        self.client.force_login(user)
+
+        response = self.client.post(
+            "/api/auth/username",
+            data=json.dumps({"new_username": "alice_new", "current_password": "StrongPass123"}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        user.refresh_from_db()
+        self.assertEqual(user.username, "alice_new")
+
+    def test_update_username_rejects_wrong_password(self):
+        user = User.objects.create_user(username="alice", password="StrongPass123")
+        self.client.force_login(user)
+
+        response = self.client.post(
+            "/api/auth/username",
+            data=json.dumps({"new_username": "alice_new", "current_password": "WrongPass"}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("error", response.json())
+
+    def test_update_password_requires_authentication(self):
+        response = self.client.post(
+            "/api/auth/password",
+            data=json.dumps({"current_password": "OldPass123", "new_password": "NewPass123"}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 401)
+        self.assertIn("error", response.json())
+
+    def test_update_password_changes_password_when_current_is_valid(self):
+        user = User.objects.create_user(username="alice", password="OldPass123")
+        self.client.force_login(user)
+
+        response = self.client.post(
+            "/api/auth/password",
+            data=json.dumps({"current_password": "OldPass123", "new_password": "NewPass123"}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        user.refresh_from_db()
+        self.assertTrue(user.check_password("NewPass123"))
+
+    def test_update_password_rejects_wrong_current_password(self):
+        user = User.objects.create_user(username="alice", password="OldPass123")
+        self.client.force_login(user)
+
+        response = self.client.post(
+            "/api/auth/password",
+            data=json.dumps({"current_password": "WrongPass", "new_password": "NewPass123"}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("error", response.json())
+
     def test_create_flashcards_requires_authentication(self):
         response = self.client.post(
             "/api/flashcards/create",

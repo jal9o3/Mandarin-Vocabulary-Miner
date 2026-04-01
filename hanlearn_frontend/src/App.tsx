@@ -8,6 +8,7 @@ import { LoginPage } from './pages/LoginPage'
 import { PastePage } from './pages/PastePage'
 import { SignupPage } from './pages/SignupPage'
 import { FlashcardReviewPage } from './pages/FlashcardReviewPage'
+import { ProfileSettingsPage } from './pages/ProfileSettingsPage'
 import { NavHeader } from './components/NavHeader'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? ''
@@ -82,6 +83,7 @@ function App() {
         <Route path="/paste" element={<PastePage />} />
         <Route path="/analyze" element={<AnalyzePage />} />
         <Route path="/account" element={<AccountPage />} />
+        <Route path="/settings" element={<ProfileSettingsPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/signup" element={<SignupPage />} />
         <Route path="/review" element={<FlashcardReviewPage />} />

@@ -174,7 +174,7 @@ export function NavHeader({ isDarkMode, onToggleDarkMode }: NavHeaderProps) {
   const openSettings = () => {
     setIsProfileMenuOpen(false)
     setIsMobileSidebarOpen(false)
-    navigate('/account')
+    navigate('/settings')
   }
 
   return (
@@ -213,7 +213,7 @@ export function NavHeader({ isDarkMode, onToggleDarkMode }: NavHeaderProps) {
               aria-expanded={isProfileMenuOpen}
               onClick={() => setIsProfileMenuOpen((v) => !v)}
               className={`grid h-10 w-10 place-items-center rounded-full border transition ${
-                isProfileMenuOpen || location.pathname === '/account'
+                isProfileMenuOpen || location.pathname === '/settings'
                   ? profileButtonActiveClasses
                   : profileButtonInactiveClasses
               }`}
@@ -390,7 +390,7 @@ export function NavHeader({ isDarkMode, onToggleDarkMode }: NavHeaderProps) {
                 aria-expanded={isProfileMenuOpen}
                 onClick={() => setIsProfileMenuOpen((v) => !v)}
                 className={`grid h-10 w-10 place-items-center rounded-full border transition ${
-                  isProfileMenuOpen || location.pathname === '/account'
+                  isProfileMenuOpen || location.pathname === '/settings'
                     ? profileButtonActiveClasses
                     : profileButtonInactiveClasses
                 }`}

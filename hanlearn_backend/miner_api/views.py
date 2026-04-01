@@ -3,7 +3,7 @@ import csv
 import io
 from datetime import timedelta
 
-from django.contrib.auth import authenticate, login, logout
+from django.contrib.auth import authenticate, login, logout, update_session_auth_hash
 from django.contrib.auth.models import User
 from django.conf import settings
 from django.db import transaction
@@ -187,6 +187,60 @@ def auth_me_view(request: HttpRequest) -> JsonResponse:
     if request.user.is_authenticated:
         return JsonResponse({"is_authenticated": True, "username": request.user.username})
     return JsonResponse({"is_authenticated": False, "username": None})
+
+
+@csrf_exempt
+@require_http_methods(["PUT", "POST"])
+def update_username_view(request: HttpRequest) -> JsonResponse:
+    if not request.user.is_authenticated:
+        return JsonResponse({"error": "Authentication required."}, status=401)
+
+    payload = _json_body(request)
+    new_username = _string_field(payload, "new_username")
+    current_password = _string_field(payload, "current_password")
+
+    if new_username is None or current_password is None:
+        return JsonResponse({"error": "Provide non-empty 'new_username' and 'current_password'."}, status=400)
+
+    user = request.user
+    if not user.check_password(current_password):
+        return JsonResponse({"error": "Current password is incorrect."}, status=400)
+
+    if new_username == user.username:
+        return JsonResponse({"error": "New username must be different from current username."}, status=400)
+
+    if User.objects.filter(username=new_username).exclude(id=user.id).exists():
+        return JsonResponse({"error": "Username is already taken."}, status=400)
+
+    user.username = new_username
+    user.save(update_fields=["username"])
+    return JsonResponse({"username": user.username, "is_authenticated": True})
+
+
+@csrf_exempt
+@require_http_methods(["PUT", "POST"])
+def update_password_view(request: HttpRequest) -> JsonResponse:
+    if not request.user.is_authenticated:
+        return JsonResponse({"error": "Authentication required."}, status=401)
+
+    payload = _json_body(request)
+    current_password = _string_field(payload, "current_password")
+    new_password = _string_field(payload, "new_password")
+
+    if current_password is None or new_password is None:
+        return JsonResponse({"error": "Provide non-empty 'current_password' and 'new_password'."}, status=400)
+
+    user = request.user
+    if not user.check_password(current_password):
+        return JsonResponse({"error": "Current password is incorrect."}, status=400)
+
+    if current_password == new_password:
+        return JsonResponse({"error": "New password must be different from current password."}, status=400)
+
+    user.set_password(new_password)
+    user.save(update_fields=["password"])
+    update_session_auth_hash(request, user)
+    return JsonResponse({"is_authenticated": True})
 
 
 @csrf_exempt
