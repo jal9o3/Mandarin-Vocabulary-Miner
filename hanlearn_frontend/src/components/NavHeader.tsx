@@ -66,6 +66,12 @@ export function NavHeader({ isDarkMode, onToggleDarkMode }: NavHeaderProps) {
   const mobileNavItemActiveClasses = isDarkMode
     ? 'border-[#f06d42] bg-[#2a221d] text-[#ffbfaa]'
     : 'border-[#d1451b] bg-[#fbe3ce] text-[#8f2f14]'
+  const mobileAuthLoginClasses = isDarkMode
+    ? 'w-full rounded-xl border border-[#d8c4b2] px-4 py-3 text-center text-sm font-semibold text-[#f2e6db] transition hover:bg-[#d8c4b2] hover:text-[#1a1613]'
+    : 'w-full rounded-xl border border-[#1b1714] px-4 py-3 text-center text-sm font-semibold text-[#1b1714] transition hover:bg-[#1b1714] hover:text-white'
+  const mobileAuthSignupClasses = isDarkMode
+    ? 'w-full rounded-xl border border-[#f06d42] bg-[#f06d42] px-4 py-3 text-center text-sm font-semibold text-[#1a1613] transition hover:bg-[#ff835e] hover:border-[#ff835e]'
+    : 'w-full rounded-xl border border-[#d1451b] bg-[#d1451b] px-4 py-3 text-center text-sm font-semibold text-white transition hover:bg-[#b73c17] hover:border-[#b73c17]'
 
   useEffect(() => {
     const loadAuth = async () => {
@@ -273,26 +279,25 @@ export function NavHeader({ isDarkMode, onToggleDarkMode }: NavHeaderProps) {
               </button>
             </>
           ) : (
-            <>
-              <NavLink
-                to="/login"
-                onClick={closeMobileSidebar}
-                className={({ isActive }) =>
-                  `${mobileNavItemClasses} ${isActive ? mobileNavItemActiveClasses : ''}`
-                }
-              >
-                Login
-              </NavLink>
-              <NavLink
-                to="/signup"
-                onClick={closeMobileSidebar}
-                className={({ isActive }) =>
-                  `${mobileNavItemClasses} ${isActive ? mobileNavItemActiveClasses : ''}`
-                }
-              >
-                Sign up
-              </NavLink>
-            </>
+            <div className="flex grow flex-col">
+              <div className="grow" />
+              <div className="flex flex-col gap-3 pb-1">
+                <NavLink
+                  to="/login"
+                  onClick={closeMobileSidebar}
+                  className={mobileAuthLoginClasses}
+                >
+                  Login
+                </NavLink>
+                <NavLink
+                  to="/signup"
+                  onClick={closeMobileSidebar}
+                  className={mobileAuthSignupClasses}
+                >
+                  Sign up
+                </NavLink>
+              </div>
+            </div>
           )}
         </nav>
       </aside>
