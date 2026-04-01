@@ -522,7 +522,7 @@ export function FlashcardReviewPage() {
       <div className="pointer-events-none absolute -right-16 top-80 h-72 w-72 rounded-full bg-[#d1451b]/10 blur-3xl" />
 
       {/* View toggle — fixed top-right, outside main so it never shifts */}
-      <div className="fixed right-4 top-20 z-50 sm:top-24">
+      <div className="fixed right-4 top-20 z-20 sm:top-24">
         <div className="inline-flex rounded-xl bg-[#e6d5c3] p-1 gap-1 shadow-md">
           <button
             onClick={handleReviewView}
