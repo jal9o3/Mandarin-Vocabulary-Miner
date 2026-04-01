@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
-import { Menu, Moon, Sun, X } from 'lucide-react'
+import { Menu, Moon, Sun, UserRound, X } from 'lucide-react'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? ''
 
@@ -17,7 +17,8 @@ export function NavHeader({ isDarkMode, onToggleDarkMode }: NavHeaderProps) {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false)
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false)
-  const profileMenuRef = useRef<HTMLDivElement | null>(null)
+  const mobileProfileMenuRef = useRef<HTMLDivElement | null>(null)
+  const desktopProfileMenuRef = useRef<HTMLDivElement | null>(null)
 
   const headerClasses = isDarkMode
     ? 'sticky top-0 z-30 border-b border-[#3a3028]/90 bg-[#1a1613]/88 backdrop-blur'
@@ -40,8 +41,8 @@ export function NavHeader({ isDarkMode, onToggleDarkMode }: NavHeaderProps) {
     ? 'border-[#d8c4b2] text-[#f2e6db] hover:bg-[#d8c4b2] hover:text-[#1a1613]'
     : 'border-[#1b1714] text-[#1b1714] hover:bg-[#1b1714] hover:text-white'
   const profileMenuClasses = isDarkMode
-    ? 'absolute right-0 top-10 z-40 min-w-40 rounded-xl border border-[#4b3f35] bg-[#221c18] p-1.5 shadow-xl shadow-black/35'
-    : 'absolute right-0 top-10 z-40 min-w-40 rounded-xl border border-[#d8ccbd] bg-[#fffdf8] p-1.5 shadow-xl shadow-[#bf9f83]/25'
+    ? 'absolute right-0 top-12 z-40 min-w-40 rounded-xl border border-[#4b3f35] bg-[#221c18] p-1.5 shadow-xl shadow-black/35'
+    : 'absolute right-0 top-12 z-40 min-w-40 rounded-xl border border-[#d8ccbd] bg-[#fffdf8] p-1.5 shadow-xl shadow-[#bf9f83]/25'
   const profileSettingsClasses = isDarkMode
     ? 'block w-full rounded-lg px-3 py-2 text-left text-sm font-semibold text-[#f2e6db] transition hover:bg-[#3a3028]'
     : 'block w-full rounded-lg px-3 py-2 text-left text-sm font-semibold text-[#3f342b] transition hover:bg-[#f4e4d6]'
@@ -101,7 +102,11 @@ export function NavHeader({ isDarkMode, onToggleDarkMode }: NavHeaderProps) {
     }
 
     const handlePointerDown = (event: MouseEvent) => {
-      if (profileMenuRef.current && !profileMenuRef.current.contains(event.target as Node)) {
+      const target = event.target as Node
+      const clickedMobileMenu = mobileProfileMenuRef.current?.contains(target) ?? false
+      const clickedDesktopMenu = desktopProfileMenuRef.current?.contains(target) ?? false
+
+      if (!clickedMobileMenu && !clickedDesktopMenu) {
         setIsProfileMenuOpen(false)
       }
     }
@@ -166,6 +171,12 @@ export function NavHeader({ isDarkMode, onToggleDarkMode }: NavHeaderProps) {
     setIsMobileSidebarOpen(false)
   }
 
+  const openSettings = () => {
+    setIsProfileMenuOpen(false)
+    setIsMobileSidebarOpen(false)
+    navigate('/account')
+  }
+
   return (
     <>
       <div className={mobileTopBarClasses}>
@@ -185,15 +196,58 @@ export function NavHeader({ isDarkMode, onToggleDarkMode }: NavHeaderProps) {
               <p className={brandTaglineClasses}>Hanlearn</p>
             </NavLink>
           </div>
-          <button
-            type="button"
-            onClick={onToggleDarkMode}
-            className={themeToggleClasses}
-            aria-label={isDarkMode ? 'Switch to light mode' : 'Switch to dark mode'}
-            title={isDarkMode ? 'Switch to light mode' : 'Switch to dark mode'}
-          >
-            {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
-          </button>
+          <div ref={mobileProfileMenuRef} className="relative flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onToggleDarkMode}
+              className={themeToggleClasses}
+              aria-label={isDarkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+              title={isDarkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+            >
+              {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
+            </button>
+            <button
+              type="button"
+              aria-label="Open settings menu"
+              aria-haspopup="menu"
+              aria-expanded={isProfileMenuOpen}
+              onClick={() => setIsProfileMenuOpen((v) => !v)}
+              className={`grid h-10 w-10 place-items-center rounded-full border transition ${
+                isProfileMenuOpen || location.pathname === '/account'
+                  ? profileButtonActiveClasses
+                  : profileButtonInactiveClasses
+              }`}
+            >
+              <UserRound size={18} aria-hidden="true" />
+            </button>
+
+            {isProfileMenuOpen ? (
+              <div
+                role="menu"
+                aria-label="Profile menu"
+                className={profileMenuClasses}
+              >
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={openSettings}
+                  className={profileSettingsClasses}
+                >
+                  Settings
+                </button>
+                {isAuthenticated ? (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={handleLogout}
+                    className={profileLogoutClasses}
+                  >
+                    Log Out
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
         </div>
       </div>
 
@@ -260,23 +314,6 @@ export function NavHeader({ isDarkMode, onToggleDarkMode }: NavHeaderProps) {
               >
                 Flashcards
               </NavLink>
-              <button
-                type="button"
-                onClick={() => {
-                  closeMobileSidebar()
-                  navigate('/account')
-                }}
-                className={mobileNavItemClasses}
-              >
-                Settings
-              </button>
-              <button
-                type="button"
-                onClick={handleLogout}
-                className={mobileNavItemClasses}
-              >
-                Log Out
-              </button>
             </>
           ) : (
             <div className="flex grow flex-col">
@@ -315,15 +352,58 @@ export function NavHeader({ isDarkMode, onToggleDarkMode }: NavHeaderProps) {
           </NavLink>
 
           <nav className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={onToggleDarkMode}
-              className={themeToggleClasses}
-              aria-label={isDarkMode ? 'Switch to light mode' : 'Switch to dark mode'}
-              title={isDarkMode ? 'Switch to light mode' : 'Switch to dark mode'}
-            >
-              {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
-            </button>
+            <div ref={desktopProfileMenuRef} className="relative flex items-center gap-2">
+              <button
+                type="button"
+                onClick={onToggleDarkMode}
+                className={themeToggleClasses}
+                aria-label={isDarkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+                title={isDarkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+              >
+                {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
+              </button>
+              <button
+                type="button"
+                aria-label="Open settings menu"
+                aria-haspopup="menu"
+                aria-expanded={isProfileMenuOpen}
+                onClick={() => setIsProfileMenuOpen((v) => !v)}
+                className={`grid h-10 w-10 place-items-center rounded-full border transition ${
+                  isProfileMenuOpen || location.pathname === '/account'
+                    ? profileButtonActiveClasses
+                    : profileButtonInactiveClasses
+                }`}
+              >
+                <UserRound size={18} aria-hidden="true" />
+              </button>
+
+              {isProfileMenuOpen ? (
+                <div
+                  role="menu"
+                  aria-label="Profile menu"
+                  className={profileMenuClasses}
+                >
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={openSettings}
+                    className={profileSettingsClasses}
+                  >
+                    Settings
+                  </button>
+                  {isAuthenticated ? (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={handleLogout}
+                      className={profileLogoutClasses}
+                    >
+                      Log Out
+                    </button>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
 
             {isAuthenticated ? (
               <>
@@ -351,51 +431,6 @@ export function NavHeader({ isDarkMode, onToggleDarkMode }: NavHeaderProps) {
                 >
                   Flashcards
                 </NavLink>
-                <div ref={profileMenuRef} className="relative">
-                  <button
-                    type="button"
-                    aria-label="Open profile menu"
-                    aria-haspopup="menu"
-                    aria-expanded={isProfileMenuOpen}
-                    onClick={() => setIsProfileMenuOpen((v) => !v)}
-                    className={`grid h-8 w-8 place-items-center rounded-full border transition ${
-                      isProfileMenuOpen || location.pathname === '/account'
-                        ? profileButtonActiveClasses
-                        : profileButtonInactiveClasses
-                    }`}
-                  >
-                    <span className="sr-only">Profile</span>
-                    <span aria-hidden="true" className="h-2.5 w-2.5 rounded-full bg-current" />
-                  </button>
-
-                  {isProfileMenuOpen ? (
-                    <div
-                      role="menu"
-                      aria-label="Profile menu"
-                      className={profileMenuClasses}
-                    >
-                      <button
-                        type="button"
-                        role="menuitem"
-                        onClick={() => {
-                          setIsProfileMenuOpen(false)
-                          navigate('/account')
-                        }}
-                        className={profileSettingsClasses}
-                      >
-                        Settings
-                      </button>
-                      <button
-                        type="button"
-                        role="menuitem"
-                        onClick={handleLogout}
-                        className={profileLogoutClasses}
-                      >
-                        Log Out
-                      </button>
-                    </div>
-                  ) : null}
-                </div>
               </>
             ) : (
               <>
