@@ -373,6 +373,63 @@ export function NavHeader({ isDarkMode, onToggleDarkMode }: NavHeaderProps) {
           </NavLink>
 
           <nav className="flex flex-wrap items-center gap-2">
+            {isAuthenticated ? (
+              <>
+                <NavLink
+                  to="/paste"
+                  className={({ isActive }) =>
+                    `${navItemBase} ${isActive ? navItemActiveClasses : navItemInactiveClasses}`
+                  }
+                >
+                  <span className="flex items-center gap-2">
+                    <Pickaxe size={16} aria-hidden="true" />
+                    <span>Miner</span>
+                  </span>
+                </NavLink>
+                <NavLink
+                  to="/library"
+                  className={({ isActive }) =>
+                    `${navItemBase} ${isActive ? navItemActiveClasses : navItemInactiveClasses}`
+                  }
+                >
+                  <span className="flex items-center gap-2">
+                    <BookOpen size={16} aria-hidden="true" />
+                    <span>Library</span>
+                  </span>
+                </NavLink>
+                <NavLink
+                  to="/review"
+                  className={({ isActive }) =>
+                    `${navItemBase} ${isActive ? navItemActiveClasses : navItemInactiveClasses}`
+                  }
+                >
+                  <span className="flex items-center gap-2">
+                    <WalletCards size={16} aria-hidden="true" />
+                    <span>Flashcards</span>
+                  </span>
+                </NavLink>
+              </>
+            ) : (
+              <>
+                <NavLink
+                  to="/login"
+                  className={({ isActive }) =>
+                    `${navItemBase} ${isActive ? navItemActiveClasses : navItemInactiveClasses}`
+                  }
+                >
+                  Login
+                </NavLink>
+                <NavLink
+                  to="/signup"
+                  className={({ isActive }) =>
+                    `${navItemBase} ${isActive ? navItemActiveClasses : navItemInactiveClasses}`
+                  }
+                >
+                  Sign up
+                </NavLink>
+              </>
+            )}
+
             <div ref={desktopProfileMenuRef} className="relative flex items-center gap-2">
               <button
                 type="button"
@@ -431,54 +488,6 @@ export function NavHeader({ isDarkMode, onToggleDarkMode }: NavHeaderProps) {
                 </div>
               ) : null}
             </div>
-
-            {isAuthenticated ? (
-              <>
-                <NavLink
-                  to="/paste"
-                  className={({ isActive }) =>
-                    `${navItemBase} ${isActive ? navItemActiveClasses : navItemInactiveClasses}`
-                  }
-                >
-                  Miner
-                </NavLink>
-                <NavLink
-                  to="/library"
-                  className={({ isActive }) =>
-                    `${navItemBase} ${isActive ? navItemActiveClasses : navItemInactiveClasses}`
-                  }
-                >
-                  Library
-                </NavLink>
-                <NavLink
-                  to="/review"
-                  className={({ isActive }) =>
-                    `${navItemBase} ${isActive ? navItemActiveClasses : navItemInactiveClasses}`
-                  }
-                >
-                  Flashcards
-                </NavLink>
-              </>
-            ) : (
-              <>
-                <NavLink
-                  to="/login"
-                  className={({ isActive }) =>
-                    `${navItemBase} ${isActive ? navItemActiveClasses : navItemInactiveClasses}`
-                  }
-                >
-                  Login
-                </NavLink>
-                <NavLink
-                  to="/signup"
-                  className={({ isActive }) =>
-                    `${navItemBase} ${isActive ? navItemActiveClasses : navItemInactiveClasses}`
-                  }
-                >
-                  Sign up
-                </NavLink>
-              </>
-            )}
           </nav>
         </div>
       </header>
