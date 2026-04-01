@@ -129,6 +129,7 @@ export function AnalyzePage() {
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
   const [isSavedToLibrary, setIsSavedToLibrary] = useState(false)
   const [isSavingToLibrary, setIsSavingToLibrary] = useState(false)
+  const [existingFlashcardWords, setExistingFlashcardWords] = useState<string[]>([])
   const [drillItems, setDrillItems] = useState<DrillItem[]>([])
   const [excludedDrillIndices, setExcludedDrillIndices] = useState<Set<number>>(new Set())
   const [editingDrillIndex, setEditingDrillIndex] = useState<number | null>(null)
@@ -180,8 +181,12 @@ export function AnalyzePage() {
   )
   const unknownWordSet = useMemo(() => new Set((analysis?.unknown_words ?? []).filter((word) => word.length > 0)), [analysis])
   const savedFlashcardWordSet = useMemo(
-    () => new Set((analysis?.saved_flashcard_words ?? []).filter((word) => word.length > 0)),
-    [analysis],
+    () => new Set([...(analysis?.saved_flashcard_words ?? []).filter((word) => word.length > 0), ...existingFlashcardWords]),
+    [analysis, existingFlashcardWords],
+  )
+  const filteredPriorityDrillSet = useMemo(
+    () => priorityDrillSet.filter((item) => !savedFlashcardWordSet.has(item.word)),
+    [priorityDrillSet, savedFlashcardWordSet],
   )
   const highlightedPassageParts = useMemo(() => {
     const sourceText = state?.sourceText ?? ''
@@ -224,6 +229,38 @@ export function AnalyzePage() {
   }, [])
 
   useEffect(() => {
+    if (!isAuthenticated) {
+      setExistingFlashcardWords([])
+      return
+    }
+
+    const loadExistingFlashcards = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/flashcards`, {
+          method: 'GET',
+          credentials: 'include',
+        })
+
+        if (!response.ok) {
+          setExistingFlashcardWords([])
+          return
+        }
+
+        const payload = (await response.json()) as { flashcards?: Array<{ word?: unknown }> }
+        const words = (payload.flashcards ?? [])
+          .map((flashcard) => (typeof flashcard.word === 'string' ? flashcard.word.trim() : ''))
+          .filter((word) => word.length > 0)
+
+        setExistingFlashcardWords(words)
+      } catch {
+        setExistingFlashcardWords([])
+      }
+    }
+
+    void loadExistingFlashcards()
+  }, [isAuthenticated])
+
+  useEffect(() => {
     if (!flashcardToast) {
       return
     }
@@ -247,7 +284,7 @@ export function AnalyzePage() {
 
   useEffect(() => {
     setDrillItems(
-      priorityDrillSet.map((item) => ({
+      filteredPriorityDrillSet.map((item) => ({
         word: item.word,
         info: item.info
           ? {
@@ -261,7 +298,7 @@ export function AnalyzePage() {
     setEditingDrillIndex(null)
     setIsEditModalOpen(false)
     setEditErrorMessage(null)
-  }, [priorityDrillSet])
+  }, [filteredPriorityDrillSet])
 
   const handleToggleExcludeDrillItem = (index: number) => {
     setExcludedDrillIndices((previous) => {
