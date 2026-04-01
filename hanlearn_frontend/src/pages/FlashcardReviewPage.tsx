@@ -1,4 +1,5 @@
 import { type FormEvent, useCallback, useEffect, useState } from 'react'
+import { Download } from 'lucide-react'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? ''
 
@@ -744,14 +745,15 @@ export function FlashcardReviewPage() {
             ) : (
               <>
                 <div className="mb-6">
-                  <h1 className="text-3xl font-bold text-[#1b1714]">All Flashcards</h1>
+                  {/* <h1 className="text-3xl font-bold text-[#1b1714]">All Flashcards</h1> */}
                   <div className="mt-2 flex flex-wrap items-center gap-3">
                     <button
                       type="button"
                       onClick={() => void handleExportCsv()}
                       disabled={isExportingCsv}
-                      className="rounded-lg bg-[#d1451b] px-4 py-2 font-semibold text-white transition hover:bg-[#b63e19] disabled:cursor-not-allowed disabled:opacity-60"
+                      className="inline-flex items-center gap-2 rounded-lg bg-[#d1451b] px-4 py-2 font-semibold text-white transition hover:bg-[#b63e19] disabled:cursor-not-allowed disabled:opacity-60"
                     >
+                      <Download className="h-4 w-4" aria-hidden="true" />
                       {isExportingCsv ? 'Exporting...' : 'Export CSV'}
                     </button>
                     <p className="text-sm text-[#75695f]">
