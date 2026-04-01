@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
-import { Moon, Sun } from 'lucide-react'
+import { Menu, Moon, Sun, X } from 'lucide-react'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? ''
 
@@ -16,6 +16,7 @@ export function NavHeader({ isDarkMode, onToggleDarkMode }: NavHeaderProps) {
   const navigate = useNavigate()
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false)
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false)
   const profileMenuRef = useRef<HTMLDivElement | null>(null)
 
   const headerClasses = isDarkMode
@@ -50,6 +51,21 @@ export function NavHeader({ isDarkMode, onToggleDarkMode }: NavHeaderProps) {
   const themeToggleClasses = isDarkMode
     ? 'grid h-10 w-10 place-items-center rounded-full border border-[#d8c4b2] bg-[#2a221d] text-[#f6eee7] transition hover:bg-[#d8c4b2] hover:text-[#1a1613]'
     : 'grid h-10 w-10 place-items-center rounded-full border border-[#1b1714] bg-transparent text-[#1b1714] transition hover:bg-[#1b1714] hover:text-white'
+  const mobileTopBarClasses = isDarkMode
+    ? 'sticky top-0 z-40 border-b border-[#3a3028]/90 bg-[#1a1613]/95 backdrop-blur md:hidden'
+    : 'sticky top-0 z-40 border-b border-[#d6c7b6]/90 bg-[#f7f2ea]/95 backdrop-blur md:hidden'
+  const mobileSidebarPanelClasses = isDarkMode
+    ? 'fixed inset-y-0 left-0 z-50 w-[18rem] border-r border-[#3a3028] bg-[#17120f] p-5 shadow-2xl md:hidden'
+    : 'fixed inset-y-0 left-0 z-50 w-[18rem] border-r border-[#d6c7b6] bg-[#fff8ef] p-5 shadow-2xl md:hidden'
+  const mobileOverlayClasses = isDarkMode
+    ? 'fixed inset-0 z-40 bg-black/55 md:hidden'
+    : 'fixed inset-0 z-40 bg-[#2a2119]/35 md:hidden'
+  const mobileNavItemClasses = isDarkMode
+    ? 'w-full rounded-xl border border-[#3f342c] px-4 py-3 text-left text-sm font-semibold text-[#f2e6db] transition hover:border-[#f06d42] hover:bg-[#2a221d]'
+    : 'w-full rounded-xl border border-[#d7c7b6] px-4 py-3 text-left text-sm font-semibold text-[#2a2119] transition hover:border-[#d1451b] hover:bg-[#f6e7d8]'
+  const mobileNavItemActiveClasses = isDarkMode
+    ? 'border-[#f06d42] bg-[#2a221d] text-[#ffbfaa]'
+    : 'border-[#d1451b] bg-[#fbe3ce] text-[#8f2f14]'
 
   useEffect(() => {
     const loadAuth = async () => {
@@ -101,7 +117,30 @@ export function NavHeader({ isDarkMode, onToggleDarkMode }: NavHeaderProps) {
 
   useEffect(() => {
     setIsProfileMenuOpen(false)
+    setIsMobileSidebarOpen(false)
   }, [location.pathname])
+
+  useEffect(() => {
+    if (!isMobileSidebarOpen) {
+      return
+    }
+
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsMobileSidebarOpen(false)
+      }
+    }
+
+    window.addEventListener('keydown', handleEscape)
+
+    return () => {
+      document.body.style.overflow = previousOverflow
+      window.removeEventListener('keydown', handleEscape)
+    }
+  }, [isMobileSidebarOpen])
 
   const handleLogout = async () => {
     try {
@@ -112,24 +151,34 @@ export function NavHeader({ isDarkMode, onToggleDarkMode }: NavHeaderProps) {
     } finally {
       setIsAuthenticated(false)
       setIsProfileMenuOpen(false)
+      setIsMobileSidebarOpen(false)
       navigate('/login')
     }
   }
 
-  return (
-    <header className={headerClasses}>
-      <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-4 sm:px-10 lg:px-12">
-        <NavLink to="/" className="flex items-center gap-3">
-          <div className={brandMonogramClasses}>
-            汉
-          </div>
-          <div>
-            <p className={brandTaglineClasses}>Hanlearn</p>
-            <p className={brandSubtitleClasses}>Mandarin Vocabulary Miner</p>
-          </div>
-        </NavLink>
+  const closeMobileSidebar = () => {
+    setIsMobileSidebarOpen(false)
+  }
 
-        <nav className="flex flex-wrap items-center gap-2">
+  return (
+    <>
+      <div className={mobileTopBarClasses}>
+        <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-3 sm:px-6">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setIsMobileSidebarOpen((open) => !open)}
+              aria-label={isMobileSidebarOpen ? 'Close navigation menu' : 'Open navigation menu'}
+              aria-expanded={isMobileSidebarOpen}
+              className={themeToggleClasses}
+            >
+              {isMobileSidebarOpen ? <X size={18} /> : <Menu size={18} />}
+            </button>
+            <NavLink to="/" className="flex items-center gap-2" onClick={closeMobileSidebar}>
+              <div className={brandMonogramClasses}>汉</div>
+              <p className={brandTaglineClasses}>Hanlearn</p>
+            </NavLink>
+          </div>
           <button
             type="button"
             onClick={onToggleDarkMode}
@@ -139,93 +188,106 @@ export function NavHeader({ isDarkMode, onToggleDarkMode }: NavHeaderProps) {
           >
             {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
           </button>
+        </div>
+      </div>
 
+      {isMobileSidebarOpen ? (
+        <button
+          type="button"
+          className={mobileOverlayClasses}
+          aria-label="Close navigation menu"
+          onClick={closeMobileSidebar}
+        />
+      ) : null}
+
+      <aside
+        className={`${mobileSidebarPanelClasses} transition-transform duration-300 ${
+          isMobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'
+        }`}
+        aria-hidden={!isMobileSidebarOpen}
+      >
+        <div className="mb-6 flex items-center justify-between">
+          <NavLink to="/" className="flex items-center gap-3" onClick={closeMobileSidebar}>
+            <div className={brandMonogramClasses}>汉</div>
+            <div>
+              <p className={brandTaglineClasses}>Hanlearn</p>
+              <p className={brandSubtitleClasses}>Mandarin Vocabulary Miner</p>
+            </div>
+          </NavLink>
+          <button
+            type="button"
+            onClick={closeMobileSidebar}
+            className={themeToggleClasses}
+            aria-label="Close navigation menu"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        <nav className="flex flex-col gap-3">
           {isAuthenticated ? (
             <>
               <NavLink
                 to="/paste"
+                onClick={closeMobileSidebar}
                 className={({ isActive }) =>
-                  `${navItemBase} ${isActive ? navItemActiveClasses : navItemInactiveClasses}`
+                  `${mobileNavItemClasses} ${isActive ? mobileNavItemActiveClasses : ''}`
                 }
               >
                 Miner
               </NavLink>
               <NavLink
                 to="/library"
+                onClick={closeMobileSidebar}
                 className={({ isActive }) =>
-                  `${navItemBase} ${isActive ? navItemActiveClasses : navItemInactiveClasses}`
+                  `${mobileNavItemClasses} ${isActive ? mobileNavItemActiveClasses : ''}`
                 }
               >
                 Library
               </NavLink>
               <NavLink
                 to="/review"
+                onClick={closeMobileSidebar}
                 className={({ isActive }) =>
-                  `${navItemBase} ${isActive ? navItemActiveClasses : navItemInactiveClasses}`
+                  `${mobileNavItemClasses} ${isActive ? mobileNavItemActiveClasses : ''}`
                 }
               >
                 Flashcards
               </NavLink>
-              <div ref={profileMenuRef} className="relative">
-                <button
-                  type="button"
-                  aria-label="Open profile menu"
-                  aria-haspopup="menu"
-                  aria-expanded={isProfileMenuOpen}
-                  onClick={() => setIsProfileMenuOpen((v) => !v)}
-                  className={`grid h-8 w-8 place-items-center rounded-full border transition ${
-                    isProfileMenuOpen || location.pathname === '/account'
-                      ? profileButtonActiveClasses
-                      : profileButtonInactiveClasses
-                  }`}
-                >
-                  <span className="sr-only">Profile</span>
-                  <span aria-hidden="true" className="h-2.5 w-2.5 rounded-full bg-current" />
-                </button>
-
-                {isProfileMenuOpen ? (
-                  <div
-                    role="menu"
-                    aria-label="Profile menu"
-                    className={profileMenuClasses}
-                  >
-                    <button
-                      type="button"
-                      role="menuitem"
-                      onClick={() => {
-                        setIsProfileMenuOpen(false)
-                        navigate('/account')
-                      }}
-                      className={profileSettingsClasses}
-                    >
-                      Settings
-                    </button>
-                    <button
-                      type="button"
-                      role="menuitem"
-                      onClick={handleLogout}
-                      className={profileLogoutClasses}
-                    >
-                      Log Out
-                    </button>
-                  </div>
-                ) : null}
-              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  closeMobileSidebar()
+                  navigate('/account')
+                }}
+                className={mobileNavItemClasses}
+              >
+                Settings
+              </button>
+              <button
+                type="button"
+                onClick={handleLogout}
+                className={mobileNavItemClasses}
+              >
+                Log Out
+              </button>
             </>
           ) : (
             <>
               <NavLink
                 to="/login"
+                onClick={closeMobileSidebar}
                 className={({ isActive }) =>
-                  `${navItemBase} ${isActive ? navItemActiveClasses : navItemInactiveClasses}`
+                  `${mobileNavItemClasses} ${isActive ? mobileNavItemActiveClasses : ''}`
                 }
               >
                 Login
               </NavLink>
               <NavLink
                 to="/signup"
+                onClick={closeMobileSidebar}
                 className={({ isActive }) =>
-                  `${navItemBase} ${isActive ? navItemActiveClasses : navItemInactiveClasses}`
+                  `${mobileNavItemClasses} ${isActive ? mobileNavItemActiveClasses : ''}`
                 }
               >
                 Sign up
@@ -233,7 +295,126 @@ export function NavHeader({ isDarkMode, onToggleDarkMode }: NavHeaderProps) {
             </>
           )}
         </nav>
-      </div>
-    </header>
+      </aside>
+
+      <header className={`${headerClasses} hidden md:block`}>
+        <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-4 sm:px-10 lg:px-12">
+          <NavLink to="/" className="flex items-center gap-3">
+            <div className={brandMonogramClasses}>
+              汉
+            </div>
+            <div>
+              <p className={brandTaglineClasses}>Hanlearn</p>
+              <p className={brandSubtitleClasses}>Mandarin Vocabulary Miner</p>
+            </div>
+          </NavLink>
+
+          <nav className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={onToggleDarkMode}
+              className={themeToggleClasses}
+              aria-label={isDarkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+              title={isDarkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+            >
+              {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
+            </button>
+
+            {isAuthenticated ? (
+              <>
+                <NavLink
+                  to="/paste"
+                  className={({ isActive }) =>
+                    `${navItemBase} ${isActive ? navItemActiveClasses : navItemInactiveClasses}`
+                  }
+                >
+                  Miner
+                </NavLink>
+                <NavLink
+                  to="/library"
+                  className={({ isActive }) =>
+                    `${navItemBase} ${isActive ? navItemActiveClasses : navItemInactiveClasses}`
+                  }
+                >
+                  Library
+                </NavLink>
+                <NavLink
+                  to="/review"
+                  className={({ isActive }) =>
+                    `${navItemBase} ${isActive ? navItemActiveClasses : navItemInactiveClasses}`
+                  }
+                >
+                  Flashcards
+                </NavLink>
+                <div ref={profileMenuRef} className="relative">
+                  <button
+                    type="button"
+                    aria-label="Open profile menu"
+                    aria-haspopup="menu"
+                    aria-expanded={isProfileMenuOpen}
+                    onClick={() => setIsProfileMenuOpen((v) => !v)}
+                    className={`grid h-8 w-8 place-items-center rounded-full border transition ${
+                      isProfileMenuOpen || location.pathname === '/account'
+                        ? profileButtonActiveClasses
+                        : profileButtonInactiveClasses
+                    }`}
+                  >
+                    <span className="sr-only">Profile</span>
+                    <span aria-hidden="true" className="h-2.5 w-2.5 rounded-full bg-current" />
+                  </button>
+
+                  {isProfileMenuOpen ? (
+                    <div
+                      role="menu"
+                      aria-label="Profile menu"
+                      className={profileMenuClasses}
+                    >
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => {
+                          setIsProfileMenuOpen(false)
+                          navigate('/account')
+                        }}
+                        className={profileSettingsClasses}
+                      >
+                        Settings
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={handleLogout}
+                        className={profileLogoutClasses}
+                      >
+                        Log Out
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+              </>
+            ) : (
+              <>
+                <NavLink
+                  to="/login"
+                  className={({ isActive }) =>
+                    `${navItemBase} ${isActive ? navItemActiveClasses : navItemInactiveClasses}`
+                  }
+                >
+                  Login
+                </NavLink>
+                <NavLink
+                  to="/signup"
+                  className={({ isActive }) =>
+                    `${navItemBase} ${isActive ? navItemActiveClasses : navItemInactiveClasses}`
+                  }
+                >
+                  Sign up
+                </NavLink>
+              </>
+            )}
+          </nav>
+        </div>
+      </header>
+    </>
   )
 }
