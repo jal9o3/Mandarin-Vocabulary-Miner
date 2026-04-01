@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
-import { Menu, Moon, Sun, UserRound, X } from 'lucide-react'
+import { BookOpen, LogIn, Menu, Moon, Pickaxe, Sun, UserPlus, UserRound, WalletCards, X } from 'lucide-react'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? ''
 
@@ -294,7 +294,10 @@ export function NavHeader({ isDarkMode, onToggleDarkMode }: NavHeaderProps) {
                   `${mobileNavItemClasses} ${isActive ? mobileNavItemActiveClasses : ''}`
                 }
               >
-                Miner
+                <span className="flex items-center gap-3">
+                  <Pickaxe size={16} aria-hidden="true" />
+                  <span>Miner</span>
+                </span>
               </NavLink>
               <NavLink
                 to="/library"
@@ -303,7 +306,10 @@ export function NavHeader({ isDarkMode, onToggleDarkMode }: NavHeaderProps) {
                   `${mobileNavItemClasses} ${isActive ? mobileNavItemActiveClasses : ''}`
                 }
               >
-                Library
+                <span className="flex items-center gap-3">
+                  <BookOpen size={16} aria-hidden="true" />
+                  <span>Library</span>
+                </span>
               </NavLink>
               <NavLink
                 to="/review"
@@ -312,7 +318,10 @@ export function NavHeader({ isDarkMode, onToggleDarkMode }: NavHeaderProps) {
                   `${mobileNavItemClasses} ${isActive ? mobileNavItemActiveClasses : ''}`
                 }
               >
-                Flashcards
+                <span className="flex items-center gap-3">
+                  <WalletCards size={16} aria-hidden="true" />
+                  <span>Flashcards</span>
+                </span>
               </NavLink>
             </>
           ) : (
@@ -324,14 +333,20 @@ export function NavHeader({ isDarkMode, onToggleDarkMode }: NavHeaderProps) {
                   onClick={closeMobileSidebar}
                   className={mobileAuthLoginClasses}
                 >
-                  Login
+                  <span className="flex items-center justify-center gap-3">
+                    <LogIn size={16} aria-hidden="true" />
+                    <span>Login</span>
+                  </span>
                 </NavLink>
                 <NavLink
                   to="/signup"
                   onClick={closeMobileSidebar}
                   className={mobileAuthSignupClasses}
                 >
-                  Sign up
+                  <span className="flex items-center justify-center gap-3">
+                    <UserPlus size={16} aria-hidden="true" />
+                    <span>Sign up</span>
+                  </span>
                 </NavLink>
               </div>
             </div>
