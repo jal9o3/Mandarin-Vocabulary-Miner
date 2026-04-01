@@ -37,3 +37,66 @@ This project is licensed under the MIT License. See the [LICENSE](LICENSE) file 
 ## Contact
 
 For any questions or suggestions, please open an issue or contact me at jeromeardiente.loria@bicol-u.edu.ph
+
+## Django REST-style API (hanlearn_backend)
+
+The Streamlit analysis logic is now extracted into reusable backend services under `hanlearn_backend/miner_api/services.py` and exposed as JSON endpoints.
+
+Run the backend:
+
+```bash
+cd hanlearn_backend
+python manage.py runserver
+```
+
+Available endpoints:
+
+- `POST /api/analyze`
+    - JSON body: `{ "text": "...", "vocab_text": "optional words separated by spaces" }`
+    - `vocab_text` is optional; if omitted, backend uses `hanlearn_backend/vocab.txt`.
+
+- `POST /api/vocab-screen`
+    - JSON body: `{ "text": "..." }`
+    - Returns unique words grouped into `HSK 1` to `HSK 9` buckets so users can select known vocabulary before analysis.
+    - HSK lists are sourced from `https://github.com/drkameleon/complete-hsk-vocabulary/tree/main/wordlists/inclusive/new`.
+    - Expected filename format is `<hsk number>.min.json` (for example, `1.min.json`).
+    - The backend reads local copies from `hanlearn_backend/wordlists/inclusive/new/` and falls back to fetching from GitHub raw URLs when a file is missing.
+
+- `POST /api/analyze-file`
+    - `multipart/form-data`
+    - file field: `file` (UTF-8 text file)
+    - optional field: `vocab_text`
+
+- `POST /api/auth/register`
+    - JSON body: `{ "username": "...", "password": "..." }`
+    - Creates an account and starts an authenticated session.
+
+- `POST /api/auth/login`
+    - JSON body: `{ "username": "...", "password": "..." }`
+    - Starts an authenticated session for an existing account.
+
+- `GET /api/auth/me`
+    - Returns current session authentication state.
+
+- `POST /api/auth/logout`
+    - Ends the authenticated session.
+
+- `POST /api/flashcards/create`
+    - JSON body: `{ "words": [{ "word": "你好", "pinyin": "ni3 hao3" }] }`
+    - Saves flashcards for the authenticated user.
+    - Guests are rejected; the user must create an account or sign in first.
+
+- `GET /api/vocab`
+    - Returns persisted vocabulary and tokenized word list.
+
+- `POST /api/vocab/update` or `PUT /api/vocab/update`
+    - JSON body can be either:
+        - `{ "vocab_text": "word1 word2 word3" }`
+        - `{ "words": ["word1", "word2", "word3"] }`
+
+Run backend API tests:
+
+```bash
+cd hanlearn_backend
+python manage.py test miner_api
+```
