@@ -11,7 +11,7 @@ services:
     runtime: python
     rootDir: hanlearn_backend
     buildCommand: ./build.sh
-    startCommand: python -m gunicorn hanlearn_backend.asgi:application -k uvicorn.workers.UvicornWorker
+    startCommand: ./start.sh
     envVars:
       - key: PYTHON_VERSION
         value: 3.12.8
