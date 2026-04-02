@@ -97,20 +97,18 @@ export function LandingPage() {
 
         <section className="mt-14 grid gap-5 lg:grid-cols-2">
           <article className="rounded-2xl border border-dashed border-[#c9b39b] bg-[#fff4e8] p-7">
-            <p className="mono text-xs uppercase tracking-[0.22em] text-[#996f4f]">Concept space</p>
-            <h2 className="mt-2 text-2xl font-extrabold text-[#2d2118]">HSK level guidance</h2>
+            {/* <p className="mono text-xs uppercase tracking-[0.22em] text-[#996f4f]">Concept space</p> */}
+            <h2 className="mt-2 text-2xl font-extrabold text-[#2d2118]">What is comprehensible input?</h2>
             <p className="mt-3 text-sm leading-relaxed text-[#644f3f]">
-              Reserve this section for explaining how Hanlearn maps unknown words to HSK bands (for example, HSK 3,
-              HSK 4, and beyond), and how learners can prioritize drills by exam-relevant difficulty.
+              The sweet spot for language acquisition is input you almost understand — where roughly 95% of words are familiar. This is where your brain naturally absorbs new grammar and vocabulary through meaning-making, not memorization. Reading becomes effortless only when the unknown elements are few enough to infer from context. This is how input becomes truly comprehensible and learning accelerates.
             </p>
           </article>
-
+          
           <article className="rounded-2xl border border-dashed border-[#c9b39b] bg-[#fff4e8] p-7">
-            <p className="mono text-xs uppercase tracking-[0.22em] text-[#996f4f]">Concept space</p>
-            <h2 className="mt-2 text-2xl font-extrabold text-[#2d2118]">Comprehensible input logic</h2>
+            {/* <p className="mono text-xs uppercase tracking-[0.22em] text-[#996f4f]">Concept space</p> */}
+            <h2 className="mt-2 text-2xl font-extrabold text-[#2d2118]">Skip the graded readers</h2>
             <p className="mt-3 text-sm leading-relaxed text-[#644f3f]">
-              Reserve this section to explain why Hanlearn targets near-level texts, how much known vocabulary supports
-              fluent reading, and what comprehension threshold unlocks effective input-driven acquisition.
+              Stop drilling through simplified children's stories. Real learning happens when you read what actually interests you—news articles, blogs, novels at your target level. Hanlearn bridges the gap: pick any advanced text you want to read, then drill exactly the words blocking comprehension. Now that advanced book becomes your comprehensible input, not a distant dream.
             </p>
           </article>
         </section>
