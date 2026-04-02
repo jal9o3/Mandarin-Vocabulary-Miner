@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 import string
 from collections import Counter
 from functools import lru_cache
@@ -14,11 +15,20 @@ from pypinyin import Style, pinyin
 
 ZH_PUNCTUATION = string.punctuation + "，。！？；：“”‘’（）【】《》   \n · 、 …"
 HSK_LEVELS = tuple(range(1, 10))
-WORDLISTS_DIR = Path(__file__).resolve().parents[1] / "wordlists" / "inclusive" / "new"
+WORDLISTS_CANDIDATES = [
+    Path(__file__).resolve().parents[1] / "wordlists" / "inclusive" / "new",
+    Path(__file__).resolve().parents[2] / "wordlists" / "inclusive" / "new",
+]
+WORDLISTS_DIR = next((path for path in WORDLISTS_CANDIDATES if path.exists()), WORDLISTS_CANDIDATES[0])
 HSK_WORDLIST_URL = (
     "https://raw.githubusercontent.com/drkameleon/complete-hsk-vocabulary/"
     "main/wordlists/inclusive/new/{level}.min.json"
 )
+ENABLE_REMOTE_WORDLIST_FETCH = os.getenv("ENABLE_REMOTE_WORDLIST_FETCH", "").lower() in {
+    "1",
+    "true",
+    "yes",
+}
 
 logger = logging.getLogger(__name__)
 
@@ -277,9 +287,13 @@ def _read_level_payload(level: int) -> list[dict]:
         except json.JSONDecodeError:
             logger.warning("Invalid JSON in local HSK wordlist: %s", local_file)
 
+    # Avoid long network waits on request path unless explicitly enabled.
+    if not ENABLE_REMOTE_WORDLIST_FETCH:
+        return []
+
     remote_url = HSK_WORDLIST_URL.format(level=level)
     try:
-        with urlopen(remote_url, timeout=6) as response:
+        with urlopen(remote_url, timeout=3) as response:
             payload = json.loads(response.read().decode("utf-8"))
             if not isinstance(payload, list):
                 return []

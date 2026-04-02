@@ -37,11 +37,15 @@ SECRET_KEY = env("SECRET_KEY", default="django-insecure-dev-only")
 DEBUG = env.bool("DEBUG", default=not bool(os.getenv("RENDER")))
 
 ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=[])
-if os.getenv("RENDER_EXTERNAL_HOSTNAME"):
-    ALLOWED_HOSTS.append(os.getenv("RENDER_EXTERNAL_HOSTNAME"))
 
-if DEBUG:
-    ALLOWED_HOSTS.extend(["127.0.0.1", "localhost"])
+# Always allow local development hosts and Render subdomains.
+DEFAULT_ALLOWED_HOSTS = ["127.0.0.1", "localhost", ".onrender.com"]
+if os.getenv("RENDER_EXTERNAL_HOSTNAME"):
+    DEFAULT_ALLOWED_HOSTS.append(os.getenv("RENDER_EXTERNAL_HOSTNAME"))
+
+for host in DEFAULT_ALLOWED_HOSTS:
+    if host and host not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append(host)
 
 
 # Application definition
@@ -153,19 +157,28 @@ STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
 # CORS
-CORS_ALLOWED_ORIGINS = env.list(
-    "CORS_ALLOWED_ORIGINS",
-    default=["https://mandarin-vocabulary-miner.vercel.app"],
-)
-CORS_ALLOWED_ORIGIN_REGEXES = env.list(
-    "CORS_ALLOWED_ORIGIN_REGEXES",
-    default=[r"^https://.*\.vercel\.app$"],
-)
+CORS_ALLOWED_ORIGINS = env.list("CORS_ALLOWED_ORIGINS", default=[])
+CORS_ALLOWED_ORIGIN_REGEXES = env.list("CORS_ALLOWED_ORIGIN_REGEXES", default=[])
+
+# Keep production and preview Vercel frontends working even if env vars are incomplete.
+DEFAULT_CORS_ORIGINS = ["https://mandarin-vocabulary-miner.vercel.app"]
+DEFAULT_CORS_REGEXES = [r"^https://.*\.vercel\.app$"]
+
 if DEBUG:
-    CORS_ALLOWED_ORIGINS += [
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-    ]
+    DEFAULT_CORS_ORIGINS.extend(
+        [
+            "http://localhost:5173",
+            "http://127.0.0.1:5173",
+        ]
+    )
+
+for origin in DEFAULT_CORS_ORIGINS:
+    if origin not in CORS_ALLOWED_ORIGINS:
+        CORS_ALLOWED_ORIGINS.append(origin)
+
+for pattern in DEFAULT_CORS_REGEXES:
+    if pattern not in CORS_ALLOWED_ORIGIN_REGEXES:
+        CORS_ALLOWED_ORIGIN_REGEXES.append(pattern)
 CORS_ALLOW_CREDENTIALS = True
 
 CSRF_TRUSTED_ORIGINS = env.list("CSRF_TRUSTED_ORIGINS", default=CORS_ALLOWED_ORIGINS)
