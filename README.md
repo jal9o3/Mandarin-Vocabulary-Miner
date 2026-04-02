@@ -96,9 +96,16 @@ streamlit_prototype/       # Legacy Streamlit app (archived)
 
 ### Running Both Services Together
 
-Open two terminal windows:
-- **Terminal 1** (Backend): `cd hanlearn_backend && python manage.py runserver`
-- **Terminal 2** (Frontend): `cd hanlearn_frontend && npm run dev`
+From the frontend directory, run a single command:
+
+```bash
+cd hanlearn_frontend
+npm run dev
+```
+
+This starts both dev servers at the same time via `concurrently`:
+- Frontend (Vite): `http://localhost:5173/`
+- Backend (Django API): `http://localhost:8000/api/`
 
 ## API Endpoints
 
