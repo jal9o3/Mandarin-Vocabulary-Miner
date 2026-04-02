@@ -54,11 +54,13 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "miner_api.apps.MinerApiConfig",
+    "corsheaders",
 ]
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     'whitenoise.middleware.WhiteNoiseMiddleware',
+    "corsheaders.middleware.CorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -149,6 +151,17 @@ USE_TZ = True
 STATIC_URL = "/static/"
 # Required for collectstatic in deployment environments.
 STATIC_ROOT = BASE_DIR / "staticfiles"
+
+# CORS
+CORS_ALLOWED_ORIGINS = [
+    "https://mandarin-vocabulary-miner.vercel.app",
+]
+if DEBUG:
+    CORS_ALLOWED_ORIGINS += [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ]
+CORS_ALLOW_CREDENTIALS = True
 
 if not DEBUG:
     # Enable WhiteNoise compression and immutable caching in production.
