@@ -12,6 +12,8 @@ def _replace_unique_index(apps, schema_editor):
     if "unique_user_flashcard_word" in constraints:
         if connection.vendor == "mysql":
             schema_editor.execute(f"DROP INDEX unique_user_flashcard_word ON {table}")
+        elif connection.vendor == "postgresql":
+            schema_editor.execute(f"ALTER TABLE {table} DROP CONSTRAINT unique_user_flashcard_word")
         else:
             schema_editor.execute("DROP INDEX IF EXISTS unique_user_flashcard_word")
 
@@ -36,6 +38,8 @@ def _restore_unique_index(apps, schema_editor):
     if "unique_user_flashcard_word_meaning" in constraints:
         if connection.vendor == "mysql":
             schema_editor.execute(f"DROP INDEX unique_user_flashcard_word_meaning ON {table}")
+        elif connection.vendor == "postgresql":
+            schema_editor.execute(f"ALTER TABLE {table} DROP CONSTRAINT unique_user_flashcard_word_meaning")
         else:
             schema_editor.execute("DROP INDEX IF EXISTS unique_user_flashcard_word_meaning")
 
