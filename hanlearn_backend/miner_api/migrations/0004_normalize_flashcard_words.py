@@ -39,13 +39,18 @@ def _remove_constraint_safe(apps, schema_editor):
     del apps
     table = "miner_api_userflashcard"
     connection = schema_editor.connection
+    quoted_table = schema_editor.quote_name(table)
+    quoted_name = schema_editor.quote_name("unique_user_flashcard_word_meaning")
     
     with connection.cursor() as cursor:
         constraints = connection.introspection.get_constraints(cursor, table)
     
     if "unique_user_flashcard_word_meaning" in constraints:
         if connection.vendor == "postgresql":
-            schema_editor.execute(f"ALTER TABLE {table} DROP CONSTRAINT unique_user_flashcard_word_meaning")
+            schema_editor.execute(
+                f"ALTER TABLE {quoted_table} DROP CONSTRAINT IF EXISTS {quoted_name}"
+            )
+            schema_editor.execute(f"DROP INDEX IF EXISTS {quoted_name}")
         elif connection.vendor == "mysql":
             schema_editor.execute(f"ALTER TABLE {table} DROP INDEX unique_user_flashcard_word_meaning")
         else:
