@@ -35,6 +35,49 @@ def _restore_word_text_fields(apps, schema_editor):
         flashcard.save(update_fields=["word_text", "pinyin"])
 
 
+def _remove_constraint_safe(apps, schema_editor):
+    del apps
+    table = "miner_api_userflashcard"
+    connection = schema_editor.connection
+    
+    with connection.cursor() as cursor:
+        constraints = connection.introspection.get_constraints(cursor, table)
+    
+    if "unique_user_flashcard_word_meaning" in constraints:
+        if connection.vendor == "postgresql":
+            schema_editor.execute(f"ALTER TABLE {table} DROP CONSTRAINT unique_user_flashcard_word_meaning")
+        elif connection.vendor == "mysql":
+            schema_editor.execute(f"ALTER TABLE {table} DROP INDEX unique_user_flashcard_word_meaning")
+        else:
+            schema_editor.execute("DROP INDEX IF EXISTS unique_user_flashcard_word_meaning")
+
+
+def _add_constraint_safe(apps, schema_editor):
+    del apps
+    table = "miner_api_userflashcard"
+    connection = schema_editor.connection
+    
+    with connection.cursor() as cursor:
+        constraints = connection.introspection.get_constraints(cursor, table)
+    
+    if "unique_user_flashcard_word_meaning" not in constraints:
+        if connection.vendor == "postgresql":
+            schema_editor.execute(
+                f"ALTER TABLE {table} ADD CONSTRAINT unique_user_flashcard_word_meaning "
+                "UNIQUE (user_id, word_id, meaning)"
+            )
+        elif connection.vendor == "mysql":
+            schema_editor.execute(
+                f"ALTER TABLE {table} ADD CONSTRAINT unique_user_flashcard_word_meaning "
+                "UNIQUE (user_id, word_id, meaning)"
+            )
+        else:
+            schema_editor.execute(
+                "CREATE UNIQUE INDEX unique_user_flashcard_word_meaning "
+                f"ON {table} (user_id, word_id, meaning)"
+            )
+
+
 class Migration(migrations.Migration):
 
     dependencies = [
@@ -66,10 +109,7 @@ class Migration(migrations.Migration):
             ),
         ),
         migrations.RunPython(_populate_word_foreign_keys, reverse_code=_restore_word_text_fields),
-        migrations.RemoveConstraint(
-            model_name="userflashcard",
-            name="unique_user_flashcard_word_meaning",
-        ),
+        migrations.RunPython(_remove_constraint_safe, reverse_code=_add_constraint_safe),
         migrations.RemoveField(
             model_name="userflashcard",
             name="pinyin",
@@ -87,11 +127,5 @@ class Migration(migrations.Migration):
                 to="miner_api.word",
             ),
         ),
-        migrations.AddConstraint(
-            model_name="userflashcard",
-            constraint=models.UniqueConstraint(
-                fields=("user", "word", "meaning"),
-                name="unique_user_flashcard_word_meaning",
-            ),
-        ),
+        migrations.RunPython(_add_constraint_safe, reverse_code=_remove_constraint_safe),
     ]
