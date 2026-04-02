@@ -40,16 +40,34 @@ export function LandingPage() {
             <p className="mono text-xs uppercase tracking-[0.22em] text-[#8a7a6a]">Sample analysis</p>
             <div className="mt-4 space-y-4">
               <div className="rounded-xl border border-[#eadfce] bg-[#fffbf4] p-4">
-                <p className="text-sm font-semibold text-[#4c423a]">Coverage score</p>
-                <p className="mt-1 text-3xl font-extrabold text-[#1b1714]">82%</p>
-                <p className="text-sm text-[#75695f]">14 words to drill before this article feels smooth.</p>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.16em] text-[#8d7c6f]">Readability estimate</p>
+                    <p className="mt-1 text-3xl font-extrabold text-[#1b1714]">82.0%</p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.16em] text-[#8d7c6f]">Unknown words</p>
+                    <p className="mt-1 text-3xl font-extrabold text-[#1b1714]">14</p>
+                  </div>
+                </div>
               </div>
               <div className="rounded-xl border border-[#eadfce] bg-white p-4">
-                <p className="text-sm font-semibold text-[#4c423a]">Unknown highlights</p>
-                <div className="mt-3 flex flex-wrap gap-2 text-sm font-semibold">
-                  <span className="rounded-full bg-[var(--han-accent-soft)] px-3 py-1 text-[#8c2f11]">沉浸式</span>
-                  <span className="rounded-full bg-[var(--han-accent-soft)] px-3 py-1 text-[#8c2f11]">词汇量</span>
-                  <span className="rounded-full bg-[var(--han-accent-soft)] px-3 py-1 text-[#8c2f11]">表达能力</span>
+                <p className="text-sm font-semibold text-[#4c423a]">New extracted words</p>
+                <div className="mt-3 grid gap-2">
+                  <article className="rounded-lg border border-[#f0e3d5] bg-[#fffbf4] p-3">
+                    <p className="text-sm font-bold text-[#8c2f11]">沉浸式</p>
+                    <p className="mt-1 text-xs uppercase tracking-[0.1em] text-[#8d7c6f]">Pronunciation</p>
+                    <p className="mt-1 text-sm text-[#4b3f36]">chen jin shi</p>
+                    <p className="mt-1 text-xs uppercase tracking-[0.1em] text-[#8d7c6f]">Meanings</p>
+                    <p className="mt-1 text-sm text-[#4b3f36]">immersive; deeply engaged</p>
+                  </article>
+                  <article className="rounded-lg border border-[#f0e3d5] bg-[#fffbf4] p-3">
+                    <p className="text-sm font-bold text-[#8c2f11]">表达能力</p>
+                    <p className="mt-1 text-xs uppercase tracking-[0.1em] text-[#8d7c6f]">Pronunciation</p>
+                    <p className="mt-1 text-sm text-[#4b3f36]">biao da neng li</p>
+                    <p className="mt-1 text-xs uppercase tracking-[0.1em] text-[#8d7c6f]">Meanings</p>
+                    <p className="mt-1 text-sm text-[#4b3f36]">ability to express oneself</p>
+                  </article>
                 </div>
               </div>
             </div>
