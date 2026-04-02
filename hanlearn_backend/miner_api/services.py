@@ -24,11 +24,19 @@ HSK_WORDLIST_URL = (
     "https://raw.githubusercontent.com/drkameleon/complete-hsk-vocabulary/"
     "main/wordlists/inclusive/new/{level}.min.json"
 )
-ENABLE_REMOTE_WORDLIST_FETCH = os.getenv("ENABLE_REMOTE_WORDLIST_FETCH", "").lower() in {
-    "1",
-    "true",
-    "yes",
-}
+
+
+def _env_to_bool(raw: str) -> bool:
+    return raw.strip().lower() in {"1", "true", "yes"}
+
+
+_remote_fetch_override = os.getenv("ENABLE_REMOTE_WORDLIST_FETCH")
+if _remote_fetch_override is None:
+    # In deployments where local JSON files are omitted, automatically fetch from
+    # the upstream source so meanings still resolve.
+    ENABLE_REMOTE_WORDLIST_FETCH = not any((WORDLISTS_DIR / f"{level}.min.json").exists() for level in HSK_LEVELS)
+else:
+    ENABLE_REMOTE_WORDLIST_FETCH = _env_to_bool(_remote_fetch_override)
 
 logger = logging.getLogger(__name__)
 
