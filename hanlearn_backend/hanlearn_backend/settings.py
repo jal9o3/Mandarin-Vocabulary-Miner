@@ -153,15 +153,32 @@ STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
 # CORS
-CORS_ALLOWED_ORIGINS = [
-    "https://mandarin-vocabulary-miner.vercel.app",
-]
+CORS_ALLOWED_ORIGINS = env.list(
+    "CORS_ALLOWED_ORIGINS",
+    default=["https://mandarin-vocabulary-miner.vercel.app"],
+)
+CORS_ALLOWED_ORIGIN_REGEXES = env.list(
+    "CORS_ALLOWED_ORIGIN_REGEXES",
+    default=[r"^https://.*\.vercel\.app$"],
+)
 if DEBUG:
     CORS_ALLOWED_ORIGINS += [
         "http://localhost:5173",
         "http://127.0.0.1:5173",
     ]
 CORS_ALLOW_CREDENTIALS = True
+
+CSRF_TRUSTED_ORIGINS = env.list("CSRF_TRUSTED_ORIGINS", default=CORS_ALLOWED_ORIGINS)
+
+# Cross-origin cookie auth (Vercel frontend -> Render backend) requires
+# secure cookies marked SameSite=None in production.
+SESSION_COOKIE_SECURE = not DEBUG
+SESSION_COOKIE_SAMESITE = "None" if not DEBUG else "Lax"
+CSRF_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SAMESITE = "None" if not DEBUG else "Lax"
+
+if not DEBUG:
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 if not DEBUG:
     # Enable WhiteNoise compression and immutable caching in production.
