@@ -21,10 +21,21 @@ def _replace_unique_index(apps, schema_editor):
         constraints = connection.introspection.get_constraints(cursor, table)
 
     if "unique_user_flashcard_word_meaning" not in constraints:
-        schema_editor.execute(
-            "CREATE UNIQUE INDEX unique_user_flashcard_word_meaning "
-            f"ON {table} (user_id, word, meaning)"
-        )
+        if connection.vendor == "postgresql":
+            schema_editor.execute(
+                f"ALTER TABLE {table} ADD CONSTRAINT unique_user_flashcard_word_meaning "
+                "UNIQUE (user_id, word, meaning)"
+            )
+        elif connection.vendor == "mysql":
+            schema_editor.execute(
+                f"ALTER TABLE {table} ADD CONSTRAINT unique_user_flashcard_word_meaning "
+                "UNIQUE (user_id, word, meaning)"
+            )
+        else:
+            schema_editor.execute(
+                "CREATE UNIQUE INDEX unique_user_flashcard_word_meaning "
+                f"ON {table} (user_id, word, meaning)"
+            )
 
 
 def _restore_unique_index(apps, schema_editor):
@@ -47,10 +58,21 @@ def _restore_unique_index(apps, schema_editor):
         constraints = connection.introspection.get_constraints(cursor, table)
 
     if "unique_user_flashcard_word" not in constraints:
-        schema_editor.execute(
-            "CREATE UNIQUE INDEX unique_user_flashcard_word "
-            f"ON {table} (user_id, word)"
-        )
+        if connection.vendor == "postgresql":
+            schema_editor.execute(
+                f"ALTER TABLE {table} ADD CONSTRAINT unique_user_flashcard_word "
+                "UNIQUE (user_id, word)"
+            )
+        elif connection.vendor == "mysql":
+            schema_editor.execute(
+                f"ALTER TABLE {table} ADD CONSTRAINT unique_user_flashcard_word "
+                "UNIQUE (user_id, word)"
+            )
+        else:
+            schema_editor.execute(
+                "CREATE UNIQUE INDEX unique_user_flashcard_word "
+                f"ON {table} (user_id, word)"
+            )
 
 
 class Migration(migrations.Migration):
