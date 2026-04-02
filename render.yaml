@@ -1,0 +1,25 @@
+databases:
+  - name: hanlearn_backenddb
+    plan: free
+    databaseName: hanlearn_backend
+    user: hanlearn_backend
+
+services:
+  - type: web
+    plan: free
+    name: hanlearn_backend
+    runtime: python
+    rootDir: hanlearn_backend
+    buildCommand: ./build.sh
+    startCommand: python -m gunicorn hanlearn_backend.asgi:application -k uvicorn.workers.UvicornWorker
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.8
+      - key: DATABASE_URL
+        fromDatabase:
+          name: hanlearn_backenddb
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+      - key: WEB_CONCURRENCY
+        value: 4
