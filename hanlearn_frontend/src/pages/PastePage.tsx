@@ -2,9 +2,8 @@ import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { HskWordSelector } from '../components/HskWordSelector'
+import { API_BASE_URL } from '../lib/apiBase'
 
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? ''
 
 type ScreeningWord = {
   word: string

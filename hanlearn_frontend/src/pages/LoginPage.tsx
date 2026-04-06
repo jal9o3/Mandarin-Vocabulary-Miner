@@ -1,8 +1,7 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? ''
+import { API_BASE_URL } from '../lib/apiBase'
 
 export function LoginPage() {
   const navigate = useNavigate()
@@ -10,6 +9,18 @@ export function LoginPage() {
   const [password, setPassword] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+
+  const readError = async (response: Response, fallback: string) => {
+    try {
+      const payload = (await response.json()) as Record<string, unknown>
+      if (typeof payload.error === 'string' && payload.error.trim()) {
+        return payload.error
+      }
+      return `${fallback} (${response.status})`
+    } catch {
+      return `${fallback} (${response.status})`
+    }
+  }
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -31,10 +42,25 @@ export function LoginPage() {
         body: JSON.stringify({ username: trimmedUsername, password }),
       })
 
-      const payload = (await response.json()) as Record<string, unknown>
       if (!response.ok) {
-        const error = typeof payload.error === 'string' ? payload.error : 'Login failed.'
-        throw new Error(error)
+        throw new Error(await readError(response, 'Login failed'))
+      }
+
+      // Validate session persistence immediately so failures are visible.
+      const meResponse = await fetch(`${API_BASE_URL}/api/auth/me`, {
+        method: 'GET',
+        credentials: 'include',
+      })
+
+      if (!meResponse.ok) {
+        throw new Error(await readError(meResponse, 'Login succeeded but session check failed'))
+      }
+
+      const mePayload = (await meResponse.json()) as { is_authenticated?: unknown }
+      if (mePayload.is_authenticated !== true) {
+        throw new Error(
+          'Login did not persist your session cookie. Use the same host for frontend and backend (127.0.0.1 or localhost), then try again.'
+        )
       }
 
       navigate('/')

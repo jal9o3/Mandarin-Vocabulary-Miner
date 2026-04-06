@@ -1,8 +1,7 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? ''
+import { API_BASE_URL } from '../lib/apiBase'
 
 function EyeIcon({ open }: { open: boolean }) {
   return open ? (

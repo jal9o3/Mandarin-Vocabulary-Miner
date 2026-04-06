@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? ''
+import { API_BASE_URL } from '../lib/apiBase'
 
 const HSK_LEVELS = [1, 2, 3, 4, 5, 6, 7, 8, 9]
 

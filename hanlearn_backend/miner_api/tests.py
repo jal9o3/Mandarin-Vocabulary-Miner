@@ -226,6 +226,35 @@ class MinerApiTests(TestCase):
         self.assertEqual(response.status_code, 201)
         self.assertTrue(User.objects.filter(username="alice").exists())
 
+    def test_login_rejects_invalid_credentials(self):
+        User.objects.create_user(username="alice", password="StrongPass123")
+
+        response = self.client.post(
+            "/api/auth/login",
+            data=json.dumps({"username": "alice", "password": "WrongPass"}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 401)
+        self.assertIn("error", response.json())
+
+    def test_login_authenticates_user_and_persists_session(self):
+        User.objects.create_user(username="alice", password="StrongPass123")
+
+        login_response = self.client.post(
+            "/api/auth/login",
+            data=json.dumps({"username": "alice", "password": "StrongPass123"}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(login_response.status_code, 200)
+        self.assertEqual(login_response.json()["is_authenticated"], True)
+
+        me_response = self.client.get("/api/auth/me")
+        self.assertEqual(me_response.status_code, 200)
+        self.assertEqual(me_response.json()["is_authenticated"], True)
+        self.assertEqual(me_response.json()["username"], "alice")
+
     def test_update_username_requires_authentication(self):
         response = self.client.post(
             "/api/auth/username",

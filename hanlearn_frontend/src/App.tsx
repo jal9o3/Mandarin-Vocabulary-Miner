@@ -10,8 +10,8 @@ import { SignupPage } from './pages/SignupPage'
 import { FlashcardReviewPage } from './pages/FlashcardReviewPage'
 import { ProfileSettingsPage } from './pages/ProfileSettingsPage'
 import { NavHeader } from './components/NavHeader'
+import { API_BASE_URL } from './lib/apiBase'
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? ''
 const THEME_STORAGE_KEY = 'hanlearn-theme'
 
 type Theme = 'light' | 'dark'

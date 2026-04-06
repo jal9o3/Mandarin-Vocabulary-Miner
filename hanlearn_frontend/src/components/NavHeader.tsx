@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { BookOpen, LogIn, LogOut, Menu, Moon, Pickaxe, Settings, Sun, UserPlus, UserRound, WalletCards, X } from 'lucide-react'
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? ''
+import { API_BASE_URL } from '../lib/apiBase'
 
 const navItemBase = 'rounded-full px-4 py-2 text-sm font-semibold transition'
 

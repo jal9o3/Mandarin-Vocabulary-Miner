@@ -34,7 +34,10 @@ environ.Env.read_env(BASE_DIR / ".env")
 SECRET_KEY = env("SECRET_KEY", default="django-insecure-dev-only")
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = env.bool("DEBUG", default=not bool(os.getenv("RENDER")))
+# Some platforms do not expose a generic "RENDER" flag, so detect hosted
+# environments using known Render variables as a safer default.
+IS_RENDER = bool(os.getenv("RENDER") or os.getenv("RENDER_EXTERNAL_HOSTNAME"))
+DEBUG = env.bool("DEBUG", default=not IS_RENDER)
 
 ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=[])
 
@@ -96,26 +99,36 @@ WSGI_APPLICATION = "hanlearn_backend.wsgi.application"
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
-if os.getenv("RENDER"):
+if IS_RENDER:
     # Production (Render → PostgreSQL)
     DATABASES = {
         "default": dj_database_url.parse(os.getenv("DATABASE_URL"))
     }
 else:
-    # Development (local → MySQL)
-    DATABASES = {
-        "default": {
-            "ENGINE": "django.db.backends.mysql",
-            "NAME": env("DATABASE_NAME"),
-            "USER": env("DATABASE_USER"),
-            "PASSWORD": env("DATABASE_PASSWORD"),
-            "HOST": env("DATABASE_HOST"),
-            "PORT": env("DATABASE_PORT"),
-            'OPTIONS': {
-                'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
+    # Development:
+    # 1) Use MySQL when explicit env vars are provided.
+    # 2) Fall back to SQLite for zero-config local auth/API usage.
+    if os.getenv("DATABASE_NAME") and os.getenv("DATABASE_USER"):
+        DATABASES = {
+            "default": {
+                "ENGINE": "django.db.backends.mysql",
+                "NAME": env("DATABASE_NAME"),
+                "USER": env("DATABASE_USER"),
+                "PASSWORD": env("DATABASE_PASSWORD"),
+                "HOST": env("DATABASE_HOST"),
+                "PORT": env("DATABASE_PORT"),
+                "OPTIONS": {
+                    "init_command": "SET sql_mode='STRICT_TRANS_TABLES'",
+                },
             }
         }
-    }
+    else:
+        DATABASES = {
+            "default": {
+                "ENGINE": "django.db.backends.sqlite3",
+                "NAME": BASE_DIR / "db.sqlite3",
+            }
+        }
 
 
 # Password validation

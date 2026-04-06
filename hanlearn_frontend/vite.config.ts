@@ -3,7 +3,7 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
 // https://vite.dev/config/
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   plugins: [
     tailwindcss(),
     react({
@@ -20,5 +20,6 @@ export default defineConfig({
       },
     },
   },
-  base: process.env.VITE_BASE_PATH || '/mandarin-vocabulary-miner/',
-})
+  // Keep local dev on root path so routing/auth redirects behave predictably.
+  base: mode === 'development' ? '/' : process.env.VITE_BASE_PATH || '/mandarin-vocabulary-miner/',
+}))

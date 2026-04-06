@@ -1,7 +1,6 @@
 import { type FormEvent, useCallback, useEffect, useState } from 'react'
 import { Download } from 'lucide-react'
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? ''
+import { API_BASE_URL } from '../lib/apiBase'
 
 const buildApiUrl = (path: string, searchParams?: URLSearchParams) => {
   const base = API_BASE_URL.replace(/\/$/, '')
