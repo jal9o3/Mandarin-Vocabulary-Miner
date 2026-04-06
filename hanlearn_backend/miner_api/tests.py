@@ -11,6 +11,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.utils import timezone
 
+from miner_api import services
 from miner_api.models import UserFlashcard, Word
 
 
@@ -119,6 +120,35 @@ class MinerApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         data = response.json()
         self.assertGreater(data["known_percentage"], 0)
+
+    @patch("miner_api.services._build_wordlist_info_lookup", return_value={})
+    def test_analyze_text_priority_drill_set_falls_back_to_pycccedict(self, _mock_wordlist_lookup):
+        response = self.client.post(
+            "/api/analyze",
+            data=json.dumps({"text": "学习", "vocab_text": ""}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        drill_set = response.json()["priority_drill_set"]
+        self.assertGreater(len(drill_set), 0)
+        first = drill_set[0]["info"]
+        self.assertIn("meanings", first)
+        self.assertIn("to learn", first["meanings"])
+
+    @patch("miner_api.services._build_wordlist_info_lookup", return_value={})
+    def test_resolve_word_flashcard_info_falls_back_to_pycccedict(self, _mock_wordlist_lookup):
+        resolved = services.resolve_word_flashcard_info("学习")
+
+        self.assertEqual(resolved["pinyin"], "xue2 xi2")
+        self.assertIn("to learn", resolved["meanings"])
+
+    @patch("miner_api.services._build_wordlist_info_lookup", return_value={})
+    def test_resolve_word_flashcard_info_falls_back_to_pycccedict_for_ju_mang(self, _mock_wordlist_lookup):
+        resolved = services.resolve_word_flashcard_info("巨蟒")
+
+        self.assertEqual(resolved["pinyin"], "ju4 mang3")
+        self.assertIn("python", resolved["meanings"])
 
     def test_vocab_screen_groups_words_into_hsk_bands(self):
         response = self.client.post(

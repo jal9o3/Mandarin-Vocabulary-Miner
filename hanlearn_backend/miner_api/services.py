@@ -1,4 +1,5 @@
 import json
+import importlib
 import logging
 import os
 import string
@@ -6,11 +7,17 @@ from collections import Counter
 from functools import lru_cache
 from math import log10
 from pathlib import Path
+from typing import Any
 from urllib.error import URLError
 from urllib.request import urlopen
 
 import jieba
 from pypinyin import Style, pinyin
+
+try:
+    from pycccedict.cccedict import CcCedict
+except ImportError:  # pragma: no cover - dependency is optional at runtime
+    CcCedict = None
 
 
 ZH_PUNCTUATION = string.punctuation + "，。！？；：“”‘’（）【】《》   \n · 、 …"
@@ -39,6 +46,73 @@ else:
     ENABLE_REMOTE_WORDLIST_FETCH = _env_to_bool(_remote_fetch_override)
 
 logger = logging.getLogger(__name__)
+
+_PYCCCEDICT_CLIENT_UNSET = object()
+_pycccedict_state: dict[str, Any | object] = {"client": _PYCCCEDICT_CLIENT_UNSET}
+
+
+def _resolve_pycccedict_class() -> Any | None:
+    if CcCedict is not None:
+        return CcCedict
+
+    try:
+        module = importlib.import_module("pycccedict.cccedict")
+        return getattr(module, "CcCedict", None)
+    except ImportError:
+        return None
+
+
+def _get_pycccedict_client() -> Any | None:
+    cached_client = _pycccedict_state.get("client", _PYCCCEDICT_CLIENT_UNSET)
+    if cached_client is not _PYCCCEDICT_CLIENT_UNSET:
+        return cached_client
+
+    resolved_class = _resolve_pycccedict_class()
+    if resolved_class is None:
+        return None
+
+    try:
+        client = resolved_class()
+        _pycccedict_state["client"] = client
+        return client
+    except (OSError, RuntimeError, ValueError):  # pragma: no cover - defensive fallback
+        logger.exception("Unable to initialize pycccedict client.")
+        _pycccedict_state["client"] = _PYCCCEDICT_CLIENT_UNSET
+        return None
+
+
+def _lookup_pycccedict(word: str) -> dict | None:
+    client = _get_pycccedict_client()
+    if client is None:
+        return None
+
+    entry = client.get_entry(word)
+    if not isinstance(entry, dict):
+        return None
+
+    pronunciation = entry.get("pinyin")
+    normalized_pinyin = pronunciation.strip() if isinstance(pronunciation, str) and pronunciation.strip() else _word_to_pinyin(word)
+
+    raw_meanings = entry.get("definitions")
+    meanings: list[str] = []
+    if isinstance(raw_meanings, list):
+        seen: set[str] = set()
+        for meaning in raw_meanings:
+            if not isinstance(meaning, str):
+                continue
+            cleaned = meaning.strip()
+            if not cleaned or cleaned in seen:
+                continue
+            seen.add(cleaned)
+            meanings.append(cleaned)
+
+    if not meanings:
+        return None
+
+    return {
+        "pronunciation": normalized_pinyin,
+        "meanings": meanings,
+    }
 
 
 def remove_punctuation(text: str) -> str:
@@ -214,6 +288,9 @@ def _format_priority_info(word: str, resolved_info: dict | None) -> dict:
         return deduped
 
     if not isinstance(resolved_info, dict):
+        pycccedict_info = _lookup_pycccedict(word)
+        if pycccedict_info is not None:
+            return pycccedict_info
         return {
             "pronunciation": _word_to_pinyin(word),
             "meanings": ["No meaning found in current wordlists."],
@@ -253,6 +330,9 @@ def _format_priority_info(word: str, resolved_info: dict | None) -> dict:
         readable_meanings = _join_meanings(meanings)
         pronunciation = "; ".join(pronunciations) if pronunciations else _word_to_pinyin(word)
         if not readable_meanings:
+            pycccedict_info = _lookup_pycccedict(word)
+            if pycccedict_info is not None:
+                return pycccedict_info
             readable_meanings = ["No meaning found in current wordlists."]
         return {
             "pronunciation": pronunciation,
@@ -260,6 +340,9 @@ def _format_priority_info(word: str, resolved_info: dict | None) -> dict:
         }
 
     if resolved_info.get("match") == "not_found":
+        pycccedict_info = _lookup_pycccedict(word)
+        if pycccedict_info is not None:
+            return pycccedict_info
         return {
             "pronunciation": _word_to_pinyin(word),
             "meanings": ["No meaning found in current wordlists."],
@@ -275,6 +358,9 @@ def _format_priority_info(word: str, resolved_info: dict | None) -> dict:
     meanings = resolved_info.get("meanings")
     readable_meanings = _join_meanings(meanings if isinstance(meanings, list) else [])
     if not readable_meanings:
+        pycccedict_info = _lookup_pycccedict(word)
+        if pycccedict_info is not None:
+            return pycccedict_info
         readable_meanings = ["No meaning found in current wordlists."]
 
     return {
