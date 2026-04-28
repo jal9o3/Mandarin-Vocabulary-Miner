@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { API_BASE_URL } from '../lib/apiBase'
+import { useAuth } from '../lib/auth'
 
 type RankedWord = {
   word: string
@@ -118,9 +119,9 @@ function HeartIcon({ filled }: { filled: boolean }) {
 export function AnalyzePage() {
   const navigate = useNavigate()
   const location = useLocation()
+  const { isAuthenticated } = useAuth()
   const state = (location.state as AnalyzeLocationState | null) ?? null
   const analysis = state?.analysis
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [isConverting, setIsConverting] = useState(false)
   const [flashcardMessage, setFlashcardMessage] = useState<string | null>(null)
   const [flashcardToast, setFlashcardToast] = useState<string | null>(null)
@@ -204,28 +205,6 @@ export function AnalyzePage() {
     const matcher = new RegExp(`(${escapedWords.join('|')})`, 'g')
     return sourceText.split(matcher).filter((part) => part.length > 0)
   }, [savedFlashcardWordSet, state?.sourceText, unknownWordSet])
-
-  useEffect(() => {
-    const loadAuth = async () => {
-      try {
-        const response = await fetch(`${API_BASE_URL}/api/auth/me`, {
-          method: 'GET',
-          credentials: 'include',
-        })
-        if (!response.ok) {
-          setIsAuthenticated(false)
-          return
-        }
-
-        const payload = (await response.json()) as { is_authenticated?: unknown }
-        setIsAuthenticated(payload.is_authenticated === true)
-      } catch {
-        setIsAuthenticated(false)
-      }
-    }
-
-    void loadAuth()
-  }, [])
 
   useEffect(() => {
     if (!isAuthenticated) {

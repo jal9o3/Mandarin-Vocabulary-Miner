@@ -1,11 +1,11 @@
 import { type FormEvent, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { API_BASE_URL } from '../lib/apiBase'
+import { useAuth } from '../lib/auth'
 
 export function ProfileSettingsPage() {
   const navigate = useNavigate()
-  const [isLoadingAuth, setIsLoadingAuth] = useState(true)
-  const [username, setUsername] = useState<string | null>(null)
+  const { status, username, setUsername } = useAuth()
 
   const [newUsername, setNewUsername] = useState('')
   const [usernamePassword, setUsernamePassword] = useState('')
@@ -20,34 +20,20 @@ export function ProfileSettingsPage() {
   const [passwordError, setPasswordError] = useState<string | null>(null)
 
   useEffect(() => {
-    const loadAuth = async () => {
-      try {
-        const response = await fetch(`${API_BASE_URL}/api/auth/me`, {
-          method: 'GET',
-          credentials: 'include',
-        })
-
-        const payload = (await response.json()) as {
-          is_authenticated?: unknown
-          username?: unknown
-        }
-
-        if (!response.ok || payload.is_authenticated !== true || typeof payload.username !== 'string') {
-          navigate('/login', { replace: true })
-          return
-        }
-
-        setUsername(payload.username)
-        setNewUsername(payload.username)
-      } catch {
-        navigate('/login', { replace: true })
-      } finally {
-        setIsLoadingAuth(false)
-      }
+    if (status === 'loading') {
+      return
     }
 
-    void loadAuth()
-  }, [navigate])
+    if (status !== 'authenticated') {
+      navigate('/login', { replace: true })
+    }
+  }, [navigate, status])
+
+  useEffect(() => {
+    if (username) {
+      setNewUsername(username)
+    }
+  }, [username])
 
   const handleUpdateUsername = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -144,7 +130,7 @@ export function ProfileSettingsPage() {
     }
   }
 
-  if (isLoadingAuth) {
+  if (status === 'loading') {
     return <main className="mx-auto min-h-screen w-full max-w-4xl px-6 py-10 sm:px-10" />
   }
 

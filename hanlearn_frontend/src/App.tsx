@@ -1,20 +1,21 @@
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
-import { AnalyzePage } from './pages/AnalyzePage'
-import { AccountPage } from './pages/AccountPage'
 import { LandingPage } from './pages/LandingPage'
-import { LibraryPage } from './pages/LibraryPage'
-import { LoginPage } from './pages/LoginPage'
-import { PastePage } from './pages/PastePage'
-import { SignupPage } from './pages/SignupPage'
-import { FlashcardReviewPage } from './pages/FlashcardReviewPage'
-import { ProfileSettingsPage } from './pages/ProfileSettingsPage'
 import { NavHeader } from './components/NavHeader'
-import { API_BASE_URL } from './lib/apiBase'
+import { useAuth } from './lib/auth'
 
 const THEME_STORAGE_KEY = 'hanlearn-theme'
 
 type Theme = 'light' | 'dark'
+
+const AnalyzePage = lazy(() => import('./pages/AnalyzePage').then((module) => ({ default: module.AnalyzePage })))
+const AccountPage = lazy(() => import('./pages/AccountPage').then((module) => ({ default: module.AccountPage })))
+const LibraryPage = lazy(() => import('./pages/LibraryPage').then((module) => ({ default: module.LibraryPage })))
+const LoginPage = lazy(() => import('./pages/LoginPage').then((module) => ({ default: module.LoginPage })))
+const PastePage = lazy(() => import('./pages/PastePage').then((module) => ({ default: module.PastePage })))
+const SignupPage = lazy(() => import('./pages/SignupPage').then((module) => ({ default: module.SignupPage })))
+const FlashcardReviewPage = lazy(() => import('./pages/FlashcardReviewPage').then((module) => ({ default: module.FlashcardReviewPage })))
+const ProfileSettingsPage = lazy(() => import('./pages/ProfileSettingsPage').then((module) => ({ default: module.ProfileSettingsPage })))
 
 function getInitialTheme(): Theme {
   if (typeof window === 'undefined') {
@@ -30,35 +31,23 @@ function getInitialTheme(): Theme {
 }
 
 function RootEntryPage() {
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null)
+  const { isAuthenticated } = useAuth()
 
-  useEffect(() => {
-    const loadAuth = async () => {
-      try {
-        const response = await fetch(`${API_BASE_URL}/api/auth/me`, {
-          method: 'GET',
-          credentials: 'include',
-        })
-        if (!response.ok) {
-          setIsAuthenticated(false)
-          return
-        }
-
-        const payload = (await response.json()) as { is_authenticated?: unknown }
-        setIsAuthenticated(payload.is_authenticated === true)
-      } catch {
-        setIsAuthenticated(false)
-      }
-    }
-
-    void loadAuth()
-  }, [])
-
-  if (isAuthenticated === null) {
-    return <main className="mx-auto min-h-screen w-full max-w-4xl px-6 py-10 sm:px-10" />
+  if (isAuthenticated) {
+    return <Navigate to="/paste" replace />
   }
 
-  return isAuthenticated ? <PastePage /> : <LandingPage />
+  return <LandingPage />
+}
+
+function RouteLoadingState() {
+  return (
+    <main className="mx-auto flex min-h-screen w-full max-w-4xl items-center justify-center px-6 py-10 sm:px-10">
+      <div className="rounded-full border border-[#d8cab8] bg-[var(--han-panel)] px-5 py-3 text-sm font-semibold text-[#66594f] shadow-sm">
+        Loading page…
+      </div>
+    </main>
+  )
 }
 
 function App() {
@@ -75,20 +64,22 @@ function App() {
         isDarkMode={theme === 'dark'}
         onToggleDarkMode={() => setTheme((current) => (current === 'dark' ? 'light' : 'dark'))}
       />
-      <Routes>
-        <Route path="/" element={<RootEntryPage />} />
-        <Route path="/landing" element={<LandingPage />} />
-        <Route path="/upload" element={<Navigate to="/paste" replace />} />
-        <Route path="/library" element={<LibraryPage />} />
-        <Route path="/paste" element={<PastePage />} />
-        <Route path="/analyze" element={<AnalyzePage />} />
-        <Route path="/account" element={<AccountPage />} />
-        <Route path="/settings" element={<ProfileSettingsPage />} />
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/signup" element={<SignupPage />} />
-        <Route path="/review" element={<FlashcardReviewPage />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+      <Suspense fallback={<RouteLoadingState />}>
+        <Routes>
+          <Route path="/" element={<RootEntryPage />} />
+          <Route path="/landing" element={<LandingPage />} />
+          <Route path="/upload" element={<Navigate to="/paste" replace />} />
+          <Route path="/library" element={<LibraryPage />} />
+          <Route path="/paste" element={<PastePage />} />
+          <Route path="/analyze" element={<AnalyzePage />} />
+          <Route path="/account" element={<AccountPage />} />
+          <Route path="/settings" element={<ProfileSettingsPage />} />
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/signup" element={<SignupPage />} />
+          <Route path="/review" element={<FlashcardReviewPage />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Suspense>
     </>
   )
 }

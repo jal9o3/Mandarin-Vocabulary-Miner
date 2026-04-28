@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { API_BASE_URL } from '../lib/apiBase'
+import { useAuth } from '../lib/auth'
 
 const HSK_LEVELS = [1, 2, 3, 4, 5, 6, 7, 8, 9]
 
@@ -111,9 +112,9 @@ function TextCard({
 }
 
 export function LibraryPage() {
+  const { isAuthenticated, status } = useAuth()
   const [texts, setTexts] = useState<SavedText[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
 
   // Reading modal state
   const [readingText, setReadingText] = useState<SavedText | null>(null)
@@ -130,14 +131,20 @@ export function LibraryPage() {
   const [isDeleting, setIsDeleting] = useState(false)
 
   useEffect(() => {
-    const load = async () => {
-      try {
-        const meRes = await fetch(`${API_BASE_URL}/api/auth/me`, { credentials: 'include' })
-        if (!meRes.ok) { setIsLoading(false); return }
-        const me = (await meRes.json()) as { is_authenticated?: boolean }
-        if (!me.is_authenticated) { setIsLoading(false); return }
-        setIsAuthenticated(true)
+    if (status === 'loading') {
+      return
+    }
 
+    if (!isAuthenticated) {
+      setTexts([])
+      setIsLoading(false)
+      return
+    }
+
+    const load = async () => {
+      setIsLoading(true)
+
+      try {
         const libRes = await fetch(`${API_BASE_URL}/api/library`, { credentials: 'include' })
         if (!libRes.ok) { setIsLoading(false); return }
         const payload = (await libRes.json()) as { texts?: SavedText[] }
@@ -147,7 +154,7 @@ export function LibraryPage() {
       }
     }
     void load()
-  }, [])
+  }, [isAuthenticated, status])
 
   const shelves = useMemo(() => {
     return HSK_LEVELS.map((level) => ({

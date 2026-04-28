@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { BookOpen, LogIn, LogOut, Menu, Moon, Pickaxe, Settings, Sun, UserPlus, UserRound, WalletCards, X } from 'lucide-react'
 import { API_BASE_URL } from '../lib/apiBase'
+import { useAuth } from '../lib/auth'
 
 const navItemBase = 'rounded-full px-4 py-2 text-sm font-semibold transition'
 
@@ -13,7 +14,7 @@ type NavHeaderProps = {
 export function NavHeader({ isDarkMode, onToggleDarkMode }: NavHeaderProps) {
   const location = useLocation()
   const navigate = useNavigate()
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const { isAuthenticated, setAnonymous } = useAuth()
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false)
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false)
   const mobileProfileMenuRef = useRef<HTMLDivElement | null>(null)
@@ -75,28 +76,6 @@ export function NavHeader({ isDarkMode, onToggleDarkMode }: NavHeaderProps) {
   const desktopSignupClasses = isDarkMode
     ? `${navItemBase} border border-[#f06d42] bg-[#f06d42] text-[#1a1613] hover:bg-[#ff835e] hover:border-[#ff835e]`
     : `${navItemBase} border border-[#d1451b] bg-[#d1451b] text-white hover:bg-[#b73c17] hover:border-[#b73c17]`
-
-  useEffect(() => {
-    const loadAuth = async () => {
-      try {
-        const response = await fetch(`${API_BASE_URL}/api/auth/me`, {
-          method: 'GET',
-          credentials: 'include',
-        })
-        if (!response.ok) {
-          setIsAuthenticated(false)
-          return
-        }
-
-        const payload = (await response.json()) as { is_authenticated?: unknown }
-        setIsAuthenticated(payload.is_authenticated === true)
-      } catch {
-        setIsAuthenticated(false)
-      }
-    }
-
-    void loadAuth()
-  }, [location.pathname])
 
   useEffect(() => {
     if (!isProfileMenuOpen) {
@@ -162,7 +141,7 @@ export function NavHeader({ isDarkMode, onToggleDarkMode }: NavHeaderProps) {
         credentials: 'include',
       })
     } finally {
-      setIsAuthenticated(false)
+      setAnonymous()
       setIsProfileMenuOpen(false)
       setIsMobileSidebarOpen(false)
       navigate('/login')

@@ -2,9 +2,11 @@ import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { API_BASE_URL } from '../lib/apiBase'
+import { useAuth } from '../lib/auth'
 
 export function LoginPage() {
   const navigate = useNavigate()
+  const { refreshAuth } = useAuth()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -47,17 +49,8 @@ export function LoginPage() {
       }
 
       // Validate session persistence immediately so failures are visible.
-      const meResponse = await fetch(`${API_BASE_URL}/api/auth/me`, {
-        method: 'GET',
-        credentials: 'include',
-      })
-
-      if (!meResponse.ok) {
-        throw new Error(await readError(meResponse, 'Login succeeded but session check failed'))
-      }
-
-      const mePayload = (await meResponse.json()) as { is_authenticated?: unknown }
-      if (mePayload.is_authenticated !== true) {
+      const isAuthenticated = await refreshAuth({ background: true })
+      if (!isAuthenticated) {
         throw new Error(
           'Login did not persist your session cookie. Use the same host for frontend and backend (127.0.0.1 or localhost), then try again.'
         )

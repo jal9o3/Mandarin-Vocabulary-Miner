@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
+  <title id="title">Hanlearn mark</title>
+  <desc id="desc">A warm orange square with the Chinese character for Han in the center.</desc>
+  <defs>
+    <linearGradient id="hanlearnGradient" x1="8" y1="6" x2="56" y2="58" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#f06d42" />
+      <stop offset="1" stop-color="#b73c17" />
+    </linearGradient>
+  </defs>
+  <rect x="4" y="4" width="56" height="56" rx="15" fill="url(#hanlearnGradient)" />
+  <path
+    fill="#fff7ef"
+    d="M17.6 18.3h28.8v5.5H34.7v5.1h9.4v5.2h-9.4v11.6h-5.6V34.1h-9.6v-5.2h9.6v-5.1H17.6zm5.5 14.2h5.4v10.6h-5.4zm12.3 0h5.5v10.6h-5.5z"
+  />
+</svg>

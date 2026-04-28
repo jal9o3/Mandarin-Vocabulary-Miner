@@ -2,12 +2,14 @@ import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { API_BASE_URL } from '../lib/apiBase'
+import { useAuth } from '../lib/auth'
 
 type AuthMode = 'login' | 'register'
 
 export function AccountPage() {
   const location = useLocation()
   const navigate = useNavigate()
+  const { refreshAuth } = useAuth()
   const requestedMode = useMemo<AuthMode>(() => {
     const value = new URLSearchParams(location.search).get('mode')
     return value === 'login' ? 'login' : 'register'
@@ -61,17 +63,8 @@ export function AccountPage() {
         throw new Error(await readError(response, 'Authentication failed'))
       }
 
-      const meResponse = await fetch(`${API_BASE_URL}/api/auth/me`, {
-        method: 'GET',
-        credentials: 'include',
-      })
-
-      if (!meResponse.ok) {
-        throw new Error(await readError(meResponse, 'Session validation failed'))
-      }
-
-      const mePayload = (await meResponse.json()) as { is_authenticated?: unknown }
-      if (mePayload.is_authenticated !== true) {
+      const isAuthenticated = await refreshAuth({ background: true })
+      if (!isAuthenticated) {
         throw new Error(
           'Authentication did not persist your session cookie. Use the same host for frontend and backend (127.0.0.1 or localhost), then try again.'
         )

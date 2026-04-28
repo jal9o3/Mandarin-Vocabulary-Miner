@@ -94,6 +94,13 @@ streamlit_prototype/       # Legacy Streamlit app (archived)
     ```
     The app will be available at `http://localhost:5173/`
 
+3. Optional local production build check with the same base path used for deployment:
+    ```bash
+    VITE_BASE_PATH=/mandarin-vocabulary-miner/ \
+    VITE_API_BASE_URL=https://hanlearn-backend.onrender.com \
+    npm run build
+    ```
+
 ### Running Both Services Together
 
 From the frontend directory, run a single command:
@@ -216,6 +223,32 @@ End the authenticated session.
 ## Project Evolution
 
 This project evolved from a Streamlit prototype (see `streamlit_prototype/` for legacy code) to a modern full-stack web application. The core analysis logic from the prototype has been extracted into reusable backend services (`hanlearn_backend/miner_api/services.py`) and now powers a React frontend.
+
+## Frontend Deployment
+
+The frontend already uses Tailwind CSS 4 in production through Vite. No separate Tailwind migration is required for Vercel.
+
+### Vercel Settings
+
+Configure the Vercel project with:
+
+- Root Directory: `hanlearn_frontend`
+- Build Command: `npm run build`
+- Output Directory: `dist`
+- Environment Variable: `VITE_API_BASE_URL=https://hanlearn-backend.onrender.com`
+- Environment Variable: `VITE_BASE_PATH=/mandarin-vocabulary-miner/`
+
+The frontend includes [hanlearn_frontend/vercel.json](hanlearn_frontend/vercel.json) so the deployed app redirects `/` to `/mandarin-vocabulary-miner/` and rewrites subpath requests back to the built SPA output.
+
+### Backend Auth Requirements
+
+For cross-origin session auth between Vercel and Render to work correctly, keep the backend production settings aligned with the frontend domain configuration:
+
+- `CORS_ALLOWED_ORIGINS` should include the production Vercel frontend domain.
+- `CSRF_TRUSTED_ORIGINS` should include the same frontend domain.
+- Preview deployments should either be covered by `CORS_ALLOWED_ORIGIN_REGEXES` or treated as non-auth preview environments.
+
+Repository env files such as `hanlearn_frontend/.env.production` are useful for local builds, but Vercel must still be configured with the same values in the project dashboard.
 
 ## Contributing
 
