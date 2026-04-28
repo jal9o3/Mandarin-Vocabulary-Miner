@@ -2,8 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { API_BASE_URL } from '../lib/apiBase'
 import { useAuth } from '../lib/auth'
-import { attachTimeout } from '../lib/requestUtils'
-import { LoadingCard, RetryPrompt } from '../components/LoadingWithRetry'
+import { BusyRetryBanner, LoadingCard } from '../components/LoadingWithRetry'
+import { attachTimeout, isAbortError, isBackendConnectionFailure } from '../lib/requestUtils'
 
 const HSK_LEVELS = [1, 2, 3, 4, 5, 6, 7, 8, 9]
 
@@ -129,6 +129,7 @@ export function LibraryPage() {
   const [editContent, setEditContent] = useState('')
   const [isSavingEdit, setIsSavingEdit] = useState(false)
   const [isEditTimedOut, setIsEditTimedOut] = useState(false)
+  const [isEditTimeoutExhausted, setIsEditTimeoutExhausted] = useState(false)
   const editControllerRef = useRef<AbortController | null>(null)
   const [editError, setEditError] = useState<string | null>(null)
 
@@ -136,6 +137,7 @@ export function LibraryPage() {
   const [deletingText, setDeletingText] = useState<SavedText | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
   const [isDeleteTimedOut, setIsDeleteTimedOut] = useState(false)
+  const [isDeleteTimeoutExhausted, setIsDeleteTimeoutExhausted] = useState(false)
   const deleteControllerRef = useRef<AbortController | null>(null)
 
   const loadLibrary = useCallback(async () => {
@@ -157,7 +159,11 @@ export function LibraryPage() {
       const payload = (await libRes.json()) as { texts?: SavedText[] }
       setTexts(payload.texts ?? [])
     } catch (error) {
-      if ((error as Error).name === 'AbortError') return
+      if (isAbortError(error)) return
+      if (isBackendConnectionFailure(error)) {
+        setIsLoadingTimedOut(true)
+        return
+      }
     } finally {
       clearTimer()
       setIsLoading(false)
@@ -195,6 +201,7 @@ export function LibraryPage() {
     const nextContent = editContent.trim()
     if (!nextContent) { setEditError('Content cannot be empty.'); return }
 
+    setIsEditTimeoutExhausted(false)
     const clearTimer = attachTimeout(setIsEditTimedOut, editControllerRef)
     setIsSavingEdit(true)
     setEditError(null)
@@ -214,7 +221,11 @@ export function LibraryPage() {
       setTexts((prev) => prev.map((t) => (t.id === payload.id ? payload : t)))
       setEditingText(null)
     } catch (error) {
-      if ((error as Error).name === 'AbortError') return
+      if (isAbortError(error)) return
+      if (isBackendConnectionFailure(error)) {
+        setIsEditTimedOut(true)
+        return
+      }
       setEditError('Unexpected error while saving.')
     } finally {
       clearTimer()
@@ -224,6 +235,7 @@ export function LibraryPage() {
 
   const handleConfirmDelete = async () => {
     if (!deletingText) return
+    setIsDeleteTimeoutExhausted(false)
     const clearTimer = attachTimeout(setIsDeleteTimedOut, deleteControllerRef)
     setIsDeleting(true)
     try {
@@ -235,7 +247,11 @@ export function LibraryPage() {
       setTexts((prev) => prev.filter((t) => t.id !== deletingText.id))
       setDeletingText(null)
     } catch (error) {
-      if ((error as Error).name === 'AbortError') return
+      if (isAbortError(error)) return
+      if (isBackendConnectionFailure(error)) {
+        setIsDeleteTimedOut(true)
+        return
+      }
     } finally {
       clearTimer()
       setIsDeleting(false)
@@ -263,14 +279,9 @@ export function LibraryPage() {
           </div>
 
           <div className="mt-8">
-            {isLoading ? (
+            {isLoading || isLoadingTimedOut ? (
               <LoadingCard
-                timedOut={isLoadingTimedOut}
-                onRetry={() => void loadLibrary()}
-                onCancel={() => {
-                  loadingControllerRef.current?.abort()
-                  setIsLoading(false)
-                }}
+                busy={isLoadingTimedOut}
                 message="Loading library…"
               />
             ) : !isAuthenticated ? (
@@ -389,7 +400,7 @@ export function LibraryPage() {
               <button
                 type="button"
                 onClick={handleSaveEdit}
-                disabled={isSavingEdit}
+                disabled={isSavingEdit || (isEditTimedOut && !isEditTimeoutExhausted)}
                 className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#d1451b] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#b63e19] disabled:opacity-60"
               >
                 {isSavingEdit && (
@@ -405,15 +416,10 @@ export function LibraryPage() {
                 Cancel
               </button>
             </div>
-            {isSavingEdit && isEditTimedOut && (
-              <RetryPrompt
-                onRetry={() => void handleSaveEdit()}
-                onCancel={() => {
-                  editControllerRef.current?.abort()
-                  setIsSavingEdit(false)
-                }}
-              />
-            )}
+            <BusyRetryBanner
+              active={isEditTimedOut}
+              onExhausted={() => setIsEditTimeoutExhausted(true)}
+            />
           </div>
         </div>
       ) : null}
@@ -430,7 +436,7 @@ export function LibraryPage() {
               <button
                 type="button"
                 onClick={handleConfirmDelete}
-                disabled={isDeleting}
+                disabled={isDeleting || (isDeleteTimedOut && !isDeleteTimeoutExhausted)}
                 className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#b42020] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#941c1c] disabled:opacity-60"
               >
                 {isDeleting && (
@@ -446,15 +452,10 @@ export function LibraryPage() {
                 Cancel
               </button>
             </div>
-            {isDeleting && isDeleteTimedOut && (
-              <RetryPrompt
-                onRetry={() => void handleConfirmDelete()}
-                onCancel={() => {
-                  deleteControllerRef.current?.abort()
-                  setIsDeleting(false)
-                }}
-              />
-            )}
+            <BusyRetryBanner
+              active={isDeleteTimedOut}
+              onExhausted={() => setIsDeleteTimeoutExhausted(true)}
+            />
           </div>
         </div>
       ) : null}

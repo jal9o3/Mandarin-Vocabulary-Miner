@@ -2,9 +2,9 @@ import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { HskWordSelector } from '../components/HskWordSelector'
-import { RetryPrompt } from '../components/LoadingWithRetry'
+import { BusyRetryBanner } from '../components/LoadingWithRetry'
 import { API_BASE_URL } from '../lib/apiBase'
-import { attachTimeout } from '../lib/requestUtils'
+import { attachTimeout, isAbortError, isBackendConnectionFailure } from '../lib/requestUtils'
 
 
 type ScreeningWord = {
@@ -44,9 +44,11 @@ export function PastePage() {
   const [selectedWords, setSelectedWords] = useState<string[]>([])
   const [isScreening, setIsScreening] = useState(false)
   const [isScreeningTimedOut, setIsScreeningTimedOut] = useState(false)
+  const [isScreeningTimeoutExhausted, setIsScreeningTimeoutExhausted] = useState(false)
   const screeningControllerRef = useRef<AbortController | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isSubmittingTimedOut, setIsSubmittingTimedOut] = useState(false)
+  const [isSubmittingTimeoutExhausted, setIsSubmittingTimeoutExhausted] = useState(false)
   const submittingControllerRef = useRef<AbortController | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
@@ -89,6 +91,7 @@ export function PastePage() {
   }
 
   const doScreening = async (trimmedText: string) => {
+    setIsScreeningTimeoutExhausted(false)
     const clearTimer = attachTimeout(setIsScreeningTimedOut, screeningControllerRef)
     setIsScreening(true)
     setErrorMessage(null)
@@ -118,7 +121,11 @@ export function PastePage() {
       })
       setSelectedWords([])
     } catch (error) {
-      if ((error as Error).name === 'AbortError') return
+      if (isAbortError(error)) return
+      if (isBackendConnectionFailure(error)) {
+        setIsScreeningTimedOut(true)
+        return
+      }
       const message = error instanceof Error ? error.message : 'Unexpected error while loading vocabulary screen.'
       setErrorMessage(message)
     } finally {
@@ -140,6 +147,7 @@ export function PastePage() {
   }
 
   const doAnalyze = async (trimmedText: string) => {
+    setIsSubmittingTimeoutExhausted(false)
     const clearTimer = attachTimeout(setIsSubmittingTimedOut, submittingControllerRef)
     setIsSubmitting(true)
     setErrorMessage(null)
@@ -176,7 +184,11 @@ export function PastePage() {
         },
       })
     } catch (error) {
-      if ((error as Error).name === 'AbortError') return
+      if (isAbortError(error)) return
+      if (isBackendConnectionFailure(error)) {
+        setIsSubmittingTimedOut(true)
+        return
+      }
       const message = error instanceof Error ? error.message : 'Unexpected error while analyzing text.'
       setErrorMessage(message)
     } finally {
@@ -228,7 +240,7 @@ export function PastePage() {
             <button
               type="button"
               onClick={handleAnalyze}
-              disabled={isSubmitting}
+              disabled={isSubmitting || (isSubmittingTimedOut && !isSubmittingTimeoutExhausted)}
               className="inline-flex items-center gap-2 rounded-xl bg-[#d1451b] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#b63e19] disabled:cursor-not-allowed disabled:opacity-70"
             >
               {isSubmitting && (
@@ -237,15 +249,10 @@ export function PastePage() {
               {isSubmitting ? 'Loading…' : 'Confirm'}
             </button>
           </div>
-          {isSubmitting && isSubmittingTimedOut && (
-            <RetryPrompt
-              onRetry={() => handleAnalyze()}
-              onCancel={() => {
-                submittingControllerRef.current?.abort()
-                setIsSubmitting(false)
-              }}
-            />
-          )}
+          <BusyRetryBanner
+            active={isSubmittingTimedOut}
+            onExhausted={() => setIsSubmittingTimeoutExhausted(true)}
+          />
         </section>
       </main>
     )
@@ -273,7 +280,7 @@ export function PastePage() {
           <div className="mt-6 flex flex-wrap gap-3 justify-center">
             <button
               type="submit"
-              disabled={isScreening}
+              disabled={isScreening || (isScreeningTimedOut && !isScreeningTimeoutExhausted)}
               className="inline-flex items-center gap-2 rounded-xl bg-[#d1451b] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#b63e19] disabled:cursor-not-allowed disabled:opacity-70"
             >
               {isScreening && (
@@ -282,15 +289,10 @@ export function PastePage() {
               {isScreening ? 'Loading…' : 'Analyze'}
             </button>
           </div>
-          {isScreening && isScreeningTimedOut && (
-            <RetryPrompt
-              onRetry={() => { void doScreening(text.trim()) }}
-              onCancel={() => {
-                screeningControllerRef.current?.abort()
-                setIsScreening(false)
-              }}
-            />
-          )}
+          <BusyRetryBanner
+            active={isScreeningTimedOut}
+            onExhausted={() => setIsScreeningTimeoutExhausted(true)}
+          />
         </form>
       </section>
     </main>

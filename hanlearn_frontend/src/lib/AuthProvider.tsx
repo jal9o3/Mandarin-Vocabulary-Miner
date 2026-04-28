@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 
+import { BusyRetryBanner } from '../components/LoadingWithRetry'
+import { isAbortError, isBackendConnectionFailure } from './requestUtils'
 import { AuthContext, requestAuthState } from './auth'
 import type { AuthContextValue, AuthStatus, RefreshAuthOptions } from './auth'
 
@@ -44,7 +46,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       setAuthenticated(authState.username)
       return true
-    } catch {
+    } catch (error) {
+      if (isBackendConnectionFailure(error)) {
+        return false
+      }
       setStatus('error')
       setUsernameState(null)
       return false
@@ -73,8 +78,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
 
         setAuthenticated(authState.username)
-      } catch {
-        if (abortController.signal.aborted) {
+      } catch (error) {
+        if (isAbortError(error)) {
+          return
+        }
+
+        if (isBackendConnectionFailure(error)) {
+          setInitAuthTimedOut(true)
           return
         }
 
@@ -100,43 +110,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [setAnonymous, setAuthenticated])
 
-  const handleRetryInitialAuth = useCallback(() => {
-    // Reset so the effect guard allows a re-run
-    hasLoadedInitialAuth.current = false
-    setStatus('loading')
-    setInitAuthTimedOut(false)
-
-    const abortController = new AbortController()
-    initAuthControllerRef.current?.abort()
-    initAuthControllerRef.current = abortController
-
-    initAuthTimerRef.current = window.setTimeout(() => setInitAuthTimedOut(true), AUTH_TIMEOUT_MS)
-
-    const loadInitialAuth = async () => {
-      try {
-        const authState = await requestAuthState(abortController.signal)
-        if (!authState.ok || !authState.isAuthenticated) {
-          setAnonymous()
-          return
-        }
-        setAuthenticated(authState.username)
-      } catch {
-        if (abortController.signal.aborted) return
-        setStatus('error')
-        setUsernameState(null)
-      } finally {
-        if (initAuthTimerRef.current != null) {
-          window.clearTimeout(initAuthTimerRef.current)
-          initAuthTimerRef.current = null
-        }
-        setInitAuthTimedOut(false)
-      }
-    }
-
-    hasLoadedInitialAuth.current = true
-    void loadInitialAuth()
-  }, [setAnonymous, setAuthenticated])
-
   const value = useMemo<AuthContextValue>(() => ({
     status,
     isAuthenticated: status === 'authenticated',
@@ -152,17 +125,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       <AuthContext.Provider value={value}>
         <div className="flex min-h-screen flex-col items-center justify-center gap-5 bg-[#fffbf4] px-6 text-center">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-[#d1451b] border-t-transparent" />
-          <p className="text-base font-semibold text-[#5b4f46]">
-            Taking longer than expected to connect…
-          </p>
+          <div className="max-w-xl w-full">
+            <BusyRetryBanner active={initAuthTimedOut} />
+          </div>
           <div className="flex gap-3">
-            <button
-              type="button"
-              onClick={handleRetryInitialAuth}
-              className="rounded-xl bg-[#d1451b] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#b63e19]"
-            >
-              Retry
-            </button>
             <button
               type="button"
               onClick={() => setAnonymous()}

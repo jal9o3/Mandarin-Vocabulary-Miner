@@ -2,8 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { API_BASE_URL } from '../lib/apiBase'
 import { useAuth } from '../lib/auth'
-import { attachTimeout } from '../lib/requestUtils'
-import { RetryPrompt } from '../components/LoadingWithRetry'
+import { BusyRetryBanner } from '../components/LoadingWithRetry'
+import { attachTimeout, isAbortError, isBackendConnectionFailure } from '../lib/requestUtils'
 
 type RankedWord = {
   word: string
@@ -126,6 +126,7 @@ export function AnalyzePage() {
   const analysis = state?.analysis
   const [isConverting, setIsConverting] = useState(false)
   const [isConvertingTimedOut, setIsConvertingTimedOut] = useState(false)
+  const [isConvertingTimeoutExhausted, setIsConvertingTimeoutExhausted] = useState(false)
   const convertingControllerRef = useRef<AbortController | null>(null)
   const [flashcardMessage, setFlashcardMessage] = useState<string | null>(null)
   const [flashcardToast, setFlashcardToast] = useState<string | null>(null)
@@ -134,6 +135,7 @@ export function AnalyzePage() {
   const [isSavedToLibrary, setIsSavedToLibrary] = useState(false)
   const [isSavingToLibrary, setIsSavingToLibrary] = useState(false)
   const [isSavingToLibraryTimedOut, setIsSavingToLibraryTimedOut] = useState(false)
+  const [isSavingToLibraryTimeoutExhausted, setIsSavingToLibraryTimeoutExhausted] = useState(false)
   const savingToLibraryControllerRef = useRef<AbortController | null>(null)
   const [existingFlashcardWords, setExistingFlashcardWords] = useState<string[]>([])
   const [drillItems, setDrillItems] = useState<DrillItem[]>([])
@@ -404,6 +406,7 @@ export function AnalyzePage() {
       return
     }
 
+    setIsSavingToLibraryTimeoutExhausted(false)
     const clearTimer = attachTimeout(setIsSavingToLibraryTimedOut, savingToLibraryControllerRef)
     setIsSavingToLibrary(true)
     try {
@@ -420,7 +423,11 @@ export function AnalyzePage() {
         setFlashcardToast('Text saved to library.')
       }
     } catch (error) {
-      if ((error as Error).name === 'AbortError') return
+      if (isAbortError(error)) return
+      if (isBackendConnectionFailure(error)) {
+        setIsSavingToLibraryTimedOut(true)
+        return
+      }
     } finally {
       clearTimer()
       setIsSavingToLibrary(false)
@@ -433,6 +440,7 @@ export function AnalyzePage() {
       return
     }
 
+    setIsConvertingTimeoutExhausted(false)
     const clearTimer = attachTimeout(setIsConvertingTimedOut, convertingControllerRef)
     setIsConverting(true)
     setFlashcardMessage(null)
@@ -457,7 +465,11 @@ export function AnalyzePage() {
       setHasSavedFlashcards(true)
       setFlashcardToast(`${created} flashcards saved.`)
     } catch (error) {
-      if ((error as Error).name === 'AbortError') return
+      if (isAbortError(error)) return
+      if (isBackendConnectionFailure(error)) {
+        setIsConvertingTimedOut(true)
+        return
+      }
       const message = error instanceof Error ? error.message : 'Unexpected error while creating flashcards.'
       setFlashcardMessage(message)
     } finally {
@@ -507,7 +519,7 @@ export function AnalyzePage() {
                 <button
                   type="button"
                   onClick={handleSaveToLibrary}
-                  disabled={isSavingToLibrary}
+                  disabled={isSavingToLibrary || (isSavingToLibraryTimedOut && !isSavingToLibraryTimeoutExhausted)}
                   aria-label={isSavedToLibrary ? 'Saved to library' : 'Save to library'}
                   title={isSavedToLibrary ? 'Saved to library' : 'Save to library'}
                   className={`inline-flex items-center justify-center rounded-full p-2 transition ${
@@ -519,15 +531,10 @@ export function AnalyzePage() {
                   <HeartIcon filled={isSavedToLibrary} />
                 </button>
               </div>
-              {isSavingToLibrary && isSavingToLibraryTimedOut && (
-                <RetryPrompt
-                  onRetry={() => void handleSaveToLibrary()}
-                  onCancel={() => {
-                    savingToLibraryControllerRef.current?.abort()
-                    setIsSavingToLibrary(false)
-                  }}
-                />
-              )}
+              <BusyRetryBanner
+                active={isSavingToLibraryTimedOut}
+                onExhausted={() => setIsSavingToLibraryTimeoutExhausted(true)}
+              />
             </div>
           ) : null}
 
@@ -605,7 +612,7 @@ export function AnalyzePage() {
               <button
                 type="button"
                 onClick={hasSavedFlashcards ? () => navigate('/review') : handleConvertToFlashcards}
-                disabled={isConverting || (!flashcardWords.length && !hasSavedFlashcards)}
+                disabled={isConverting || (isConvertingTimedOut && !isConvertingTimeoutExhausted) || (!flashcardWords.length && !hasSavedFlashcards)}
                 className="ml-auto inline-flex items-center gap-2 rounded-xl bg-[#d1451b] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#b63e19] disabled:cursor-not-allowed disabled:opacity-70"
               >
                 {isConverting && (
@@ -613,15 +620,10 @@ export function AnalyzePage() {
                 )}
                 {isConverting ? 'Creating…' : hasSavedFlashcards ? 'Review Flashcards' : 'Create Flashcards'}
               </button>
-              {isConverting && isConvertingTimedOut && (
-                <RetryPrompt
-                  onRetry={() => void handleConvertToFlashcards()}
-                  onCancel={() => {
-                    convertingControllerRef.current?.abort()
-                    setIsConverting(false)
-                  }}
-                />
-              )}
+              <BusyRetryBanner
+                active={isConvertingTimedOut}
+                onExhausted={() => setIsConvertingTimeoutExhausted(true)}
+              />
               {flashcardMessage ? <p className="mt-3 text-sm font-semibold text-[#b42020]">{flashcardMessage}</p> : null}
             </div>
           </div>

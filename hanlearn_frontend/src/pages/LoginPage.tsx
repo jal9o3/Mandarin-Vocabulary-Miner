@@ -3,8 +3,8 @@ import type { FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { API_BASE_URL } from '../lib/apiBase'
 import { useAuth } from '../lib/auth'
-import { attachTimeout } from '../lib/requestUtils'
-import { RetryPrompt } from '../components/LoadingWithRetry'
+import { BusyRetryBanner } from '../components/LoadingWithRetry'
+import { attachTimeout, isAbortError, isBackendConnectionFailure } from '../lib/requestUtils'
 
 export function LoginPage() {
   const navigate = useNavigate()
@@ -13,6 +13,7 @@ export function LoginPage() {
   const [password, setPassword] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isSubmittingTimedOut, setIsSubmittingTimedOut] = useState(false)
+  const [isSubmittingTimeoutExhausted, setIsSubmittingTimeoutExhausted] = useState(false)
   const submittingControllerRef = useRef<AbortController | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
@@ -37,6 +38,7 @@ export function LoginPage() {
       return
     }
 
+    setIsSubmittingTimeoutExhausted(false)
     const clearTimer = attachTimeout(setIsSubmittingTimedOut, submittingControllerRef)
     setIsSubmitting(true)
     setErrorMessage(null)
@@ -64,7 +66,11 @@ export function LoginPage() {
 
       navigate('/')
     } catch (error) {
-      if ((error as Error).name === 'AbortError') return
+      if (isAbortError(error)) return
+      if (isBackendConnectionFailure(error)) {
+        setIsSubmittingTimedOut(true)
+        return
+      }
       setErrorMessage(error instanceof Error ? error.message : 'Unexpected error.')
     } finally {
       clearTimer()
@@ -107,7 +113,7 @@ export function LoginPage() {
 
           <button
             type="submit"
-            disabled={isSubmitting}
+            disabled={isSubmitting || (isSubmittingTimedOut && !isSubmittingTimeoutExhausted)}
             className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#d1451b] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#b63e19] disabled:cursor-not-allowed disabled:opacity-70"
           >
             {isSubmitting && (
@@ -115,15 +121,10 @@ export function LoginPage() {
             )}
             {isSubmitting ? 'Please wait…' : 'Log in'}
           </button>
-          {isSubmitting && isSubmittingTimedOut && (
-            <RetryPrompt
-              onRetry={() => void handleSubmit({ preventDefault: () => {} } as FormEvent<HTMLFormElement>)}
-              onCancel={() => {
-                submittingControllerRef.current?.abort()
-                setIsSubmitting(false)
-              }}
-            />
-          )}
+          <BusyRetryBanner
+            active={isSubmittingTimedOut}
+            onExhausted={() => setIsSubmittingTimeoutExhausted(true)}
+          />
         </form>
 
         <p className="mt-5 text-center text-sm text-[#66594f]">

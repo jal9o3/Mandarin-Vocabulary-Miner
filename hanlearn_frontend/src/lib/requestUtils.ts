@@ -22,3 +22,31 @@ export function attachTimeout(
   const id = window.setTimeout(() => setTimedOut(true), timeoutMs)
   return () => window.clearTimeout(id)
 }
+
+export function isAbortError(error: unknown): boolean {
+  return error instanceof DOMException && error.name === 'AbortError'
+}
+
+export function isBackendConnectionFailure(error: unknown): boolean {
+  if (isAbortError(error)) {
+    return false
+  }
+
+  const message = error instanceof Error ? error.message.toLowerCase() : ''
+  if (!message) {
+    return false
+  }
+
+  return (
+    message.includes('failed to fetch')
+    || message.includes('networkerror')
+    || message.includes('network error')
+    || message.includes('fetch failed')
+    || message.includes('load failed')
+    || message.includes('connection')
+    || message.includes('cors')
+    || message.includes('gateway timeout')
+    || message.includes('bad gateway')
+    || message.includes('service unavailable')
+  )
+}
