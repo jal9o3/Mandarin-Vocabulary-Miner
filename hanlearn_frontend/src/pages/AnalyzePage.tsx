@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { API_BASE_URL } from '../lib/apiBase'
 import { useAuth } from '../lib/auth'
+import { attachTimeout } from '../lib/requestUtils'
+import { RetryPrompt } from '../components/LoadingWithRetry'
 
 type RankedWord = {
   word: string
@@ -123,12 +125,16 @@ export function AnalyzePage() {
   const state = (location.state as AnalyzeLocationState | null) ?? null
   const analysis = state?.analysis
   const [isConverting, setIsConverting] = useState(false)
+  const [isConvertingTimedOut, setIsConvertingTimedOut] = useState(false)
+  const convertingControllerRef = useRef<AbortController | null>(null)
   const [flashcardMessage, setFlashcardMessage] = useState<string | null>(null)
   const [flashcardToast, setFlashcardToast] = useState<string | null>(null)
   const [hasSavedFlashcards, setHasSavedFlashcards] = useState(false)
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
   const [isSavedToLibrary, setIsSavedToLibrary] = useState(false)
   const [isSavingToLibrary, setIsSavingToLibrary] = useState(false)
+  const [isSavingToLibraryTimedOut, setIsSavingToLibraryTimedOut] = useState(false)
+  const savingToLibraryControllerRef = useRef<AbortController | null>(null)
   const [existingFlashcardWords, setExistingFlashcardWords] = useState<string[]>([])
   const [drillItems, setDrillItems] = useState<DrillItem[]>([])
   const [excludedDrillIndices, setExcludedDrillIndices] = useState<Set<number>>(new Set())
@@ -398,6 +404,7 @@ export function AnalyzePage() {
       return
     }
 
+    const clearTimer = attachTimeout(setIsSavingToLibraryTimedOut, savingToLibraryControllerRef)
     setIsSavingToLibrary(true)
     try {
       const title = sourceText.trim().slice(0, 50)
@@ -406,12 +413,16 @@ export function AnalyzePage() {
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content: sourceText.trim(), title }),
+        signal: savingToLibraryControllerRef.current?.signal,
       })
       if (response.ok || response.status === 201) {
         setIsSavedToLibrary(true)
         setFlashcardToast('Text saved to library.')
       }
+    } catch (error) {
+      if ((error as Error).name === 'AbortError') return
     } finally {
+      clearTimer()
       setIsSavingToLibrary(false)
     }
   }
@@ -422,6 +433,7 @@ export function AnalyzePage() {
       return
     }
 
+    const clearTimer = attachTimeout(setIsConvertingTimedOut, convertingControllerRef)
     setIsConverting(true)
     setFlashcardMessage(null)
     try {
@@ -432,6 +444,7 @@ export function AnalyzePage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ words: flashcardWords }),
+        signal: convertingControllerRef.current?.signal,
       })
 
       const payload = (await response.json()) as { error?: unknown; total?: unknown; created?: unknown }
@@ -444,9 +457,11 @@ export function AnalyzePage() {
       setHasSavedFlashcards(true)
       setFlashcardToast(`${created} flashcards saved.`)
     } catch (error) {
+      if ((error as Error).name === 'AbortError') return
       const message = error instanceof Error ? error.message : 'Unexpected error while creating flashcards.'
       setFlashcardMessage(message)
     } finally {
+      clearTimer()
       setIsConverting(false)
     }
   }
@@ -485,7 +500,10 @@ export function AnalyzePage() {
                   ),
                 )}
               </p>
-              <div className="mt-4 flex justify-end">
+              <div className="mt-4 flex items-center justify-end gap-3">
+                {isSavingToLibrary && (
+                  <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-[#d1451b] border-t-transparent" />
+                )}
                 <button
                   type="button"
                   onClick={handleSaveToLibrary}
@@ -501,6 +519,15 @@ export function AnalyzePage() {
                   <HeartIcon filled={isSavedToLibrary} />
                 </button>
               </div>
+              {isSavingToLibrary && isSavingToLibraryTimedOut && (
+                <RetryPrompt
+                  onRetry={() => void handleSaveToLibrary()}
+                  onCancel={() => {
+                    savingToLibraryControllerRef.current?.abort()
+                    setIsSavingToLibrary(false)
+                  }}
+                />
+              )}
             </div>
           ) : null}
 
@@ -579,10 +606,22 @@ export function AnalyzePage() {
                 type="button"
                 onClick={hasSavedFlashcards ? () => navigate('/review') : handleConvertToFlashcards}
                 disabled={isConverting || (!flashcardWords.length && !hasSavedFlashcards)}
-                className="ml-auto block rounded-xl bg-[#d1451b] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#b63e19] disabled:cursor-not-allowed disabled:opacity-70"
+                className="ml-auto inline-flex items-center gap-2 rounded-xl bg-[#d1451b] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#b63e19] disabled:cursor-not-allowed disabled:opacity-70"
               >
-                {isConverting ? 'Creating...' : hasSavedFlashcards ? 'Review Flashcards' : 'Create Flashcards'}
+                {isConverting && (
+                  <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                )}
+                {isConverting ? 'Creating…' : hasSavedFlashcards ? 'Review Flashcards' : 'Create Flashcards'}
               </button>
+              {isConverting && isConvertingTimedOut && (
+                <RetryPrompt
+                  onRetry={() => void handleConvertToFlashcards()}
+                  onCancel={() => {
+                    convertingControllerRef.current?.abort()
+                    setIsConverting(false)
+                  }}
+                />
+              )}
               {flashcardMessage ? <p className="mt-3 text-sm font-semibold text-[#b42020]">{flashcardMessage}</p> : null}
             </div>
           </div>

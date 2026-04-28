@@ -1,7 +1,9 @@
-import { type FormEvent, useEffect, useState } from 'react'
+import { type FormEvent, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { API_BASE_URL } from '../lib/apiBase'
 import { useAuth } from '../lib/auth'
+import { attachTimeout } from '../lib/requestUtils'
+import { RetryPrompt } from '../components/LoadingWithRetry'
 
 export function ProfileSettingsPage() {
   const navigate = useNavigate()
@@ -10,12 +12,16 @@ export function ProfileSettingsPage() {
   const [newUsername, setNewUsername] = useState('')
   const [usernamePassword, setUsernamePassword] = useState('')
   const [isUpdatingUsername, setIsUpdatingUsername] = useState(false)
+  const [isUpdatingUsernameTimedOut, setIsUpdatingUsernameTimedOut] = useState(false)
+  const updatingUsernameControllerRef = useRef<AbortController | null>(null)
   const [usernameSuccess, setUsernameSuccess] = useState<string | null>(null)
   const [usernameError, setUsernameError] = useState<string | null>(null)
 
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false)
+  const [isUpdatingPasswordTimedOut, setIsUpdatingPasswordTimedOut] = useState(false)
+  const updatingPasswordControllerRef = useRef<AbortController | null>(null)
   const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null)
   const [passwordError, setPasswordError] = useState<string | null>(null)
 
@@ -45,6 +51,7 @@ export function ProfileSettingsPage() {
       return
     }
 
+    const clearTimer = attachTimeout(setIsUpdatingUsernameTimedOut, updatingUsernameControllerRef)
     setIsUpdatingUsername(true)
     setUsernameError(null)
     setUsernameSuccess(null)
@@ -60,6 +67,7 @@ export function ProfileSettingsPage() {
           new_username: trimmedUsername,
           current_password: usernamePassword,
         }),
+        signal: updatingUsernameControllerRef.current?.signal,
       })
 
       const payload = (await response.json()) as {
@@ -80,9 +88,11 @@ export function ProfileSettingsPage() {
       setUsernamePassword('')
       setUsernameSuccess('Username updated successfully.')
     } catch (error) {
+      if ((error as Error).name === 'AbortError') return
       const message = error instanceof Error ? error.message : 'Unexpected error while updating username.'
       setUsernameError(message)
     } finally {
+      clearTimer()
       setIsUpdatingUsername(false)
     }
   }
@@ -96,6 +106,7 @@ export function ProfileSettingsPage() {
       return
     }
 
+    const clearTimer = attachTimeout(setIsUpdatingPasswordTimedOut, updatingPasswordControllerRef)
     setIsUpdatingPassword(true)
     setPasswordError(null)
     setPasswordSuccess(null)
@@ -111,6 +122,7 @@ export function ProfileSettingsPage() {
           current_password: currentPassword,
           new_password: newPassword,
         }),
+        signal: updatingPasswordControllerRef.current?.signal,
       })
 
       const payload = (await response.json()) as { error?: unknown }
@@ -123,9 +135,11 @@ export function ProfileSettingsPage() {
       setNewPassword('')
       setPasswordSuccess('Password updated successfully.')
     } catch (error) {
+      if ((error as Error).name === 'AbortError') return
       const message = error instanceof Error ? error.message : 'Unexpected error while updating password.'
       setPasswordError(message)
     } finally {
+      clearTimer()
       setIsUpdatingPassword(false)
     }
   }
@@ -172,10 +186,22 @@ export function ProfileSettingsPage() {
             <button
               type="submit"
               disabled={isUpdatingUsername}
-              className="w-full rounded-xl bg-[#d1451b] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#b63e19] disabled:cursor-not-allowed disabled:opacity-70"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#d1451b] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#b63e19] disabled:cursor-not-allowed disabled:opacity-70"
             >
+              {isUpdatingUsername && (
+                <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+              )}
               {isUpdatingUsername ? 'Updating...' : 'Update Username'}
             </button>
+            {isUpdatingUsername && isUpdatingUsernameTimedOut && (
+              <RetryPrompt
+                onRetry={() => void handleUpdateUsername({ preventDefault: () => {} } as FormEvent<HTMLFormElement>)}
+                onCancel={() => {
+                  updatingUsernameControllerRef.current?.abort()
+                  setIsUpdatingUsername(false)
+                }}
+              />
+            )}
           </form>
 
           <form className="space-y-3 rounded-xl border border-[#e6dbc9] bg-white p-4" onSubmit={handleUpdatePassword}>
@@ -207,10 +233,22 @@ export function ProfileSettingsPage() {
             <button
               type="submit"
               disabled={isUpdatingPassword}
-              className="w-full rounded-xl bg-[#d1451b] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#b63e19] disabled:cursor-not-allowed disabled:opacity-70"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#d1451b] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#b63e19] disabled:cursor-not-allowed disabled:opacity-70"
             >
+              {isUpdatingPassword && (
+                <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+              )}
               {isUpdatingPassword ? 'Updating...' : 'Update Password'}
             </button>
+            {isUpdatingPassword && isUpdatingPasswordTimedOut && (
+              <RetryPrompt
+                onRetry={() => void handleUpdatePassword({ preventDefault: () => {} } as FormEvent<HTMLFormElement>)}
+                onCancel={() => {
+                  updatingPasswordControllerRef.current?.abort()
+                  setIsUpdatingPassword(false)
+                }}
+              />
+            )}
           </form>
         </div>
       </section>

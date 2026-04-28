@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { API_BASE_URL } from '../lib/apiBase'
 import { useAuth } from '../lib/auth'
+import { attachTimeout } from '../lib/requestUtils'
+import { LoadingCard, RetryPrompt } from '../components/LoadingWithRetry'
 
 const HSK_LEVELS = [1, 2, 3, 4, 5, 6, 7, 8, 9]
 
@@ -115,6 +117,8 @@ export function LibraryPage() {
   const { isAuthenticated, status } = useAuth()
   const [texts, setTexts] = useState<SavedText[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [isLoadingTimedOut, setIsLoadingTimedOut] = useState(false)
+  const loadingControllerRef = useRef<AbortController | null>(null)
 
   // Reading modal state
   const [readingText, setReadingText] = useState<SavedText | null>(null)
@@ -124,37 +128,49 @@ export function LibraryPage() {
   const [editTitle, setEditTitle] = useState('')
   const [editContent, setEditContent] = useState('')
   const [isSavingEdit, setIsSavingEdit] = useState(false)
+  const [isEditTimedOut, setIsEditTimedOut] = useState(false)
+  const editControllerRef = useRef<AbortController | null>(null)
   const [editError, setEditError] = useState<string | null>(null)
 
   // Delete confirmation state
   const [deletingText, setDeletingText] = useState<SavedText | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [isDeleteTimedOut, setIsDeleteTimedOut] = useState(false)
+  const deleteControllerRef = useRef<AbortController | null>(null)
 
-  useEffect(() => {
-    if (status === 'loading') {
-      return
-    }
-
+  const loadLibrary = useCallback(async () => {
     if (!isAuthenticated) {
       setTexts([])
       setIsLoading(false)
       return
     }
 
-    const load = async () => {
-      setIsLoading(true)
+    const clearTimer = attachTimeout(setIsLoadingTimedOut, loadingControllerRef)
+    setIsLoading(true)
 
-      try {
-        const libRes = await fetch(`${API_BASE_URL}/api/library`, { credentials: 'include' })
-        if (!libRes.ok) { setIsLoading(false); return }
-        const payload = (await libRes.json()) as { texts?: SavedText[] }
-        setTexts(payload.texts ?? [])
-      } finally {
-        setIsLoading(false)
-      }
+    try {
+      const libRes = await fetch(`${API_BASE_URL}/api/library`, {
+        credentials: 'include',
+        signal: loadingControllerRef.current?.signal,
+      })
+      if (!libRes.ok) { return }
+      const payload = (await libRes.json()) as { texts?: SavedText[] }
+      setTexts(payload.texts ?? [])
+    } catch (error) {
+      if ((error as Error).name === 'AbortError') return
+    } finally {
+      clearTimer()
+      setIsLoading(false)
     }
-    void load()
-  }, [isAuthenticated, status])
+  }, [isAuthenticated])
+
+  useEffect(() => {
+    if (status === 'loading') {
+      return
+    }
+
+    void loadLibrary()
+  }, [isAuthenticated, status, loadLibrary])
 
   const shelves = useMemo(() => {
     return HSK_LEVELS.map((level) => ({
@@ -179,6 +195,7 @@ export function LibraryPage() {
     const nextContent = editContent.trim()
     if (!nextContent) { setEditError('Content cannot be empty.'); return }
 
+    const clearTimer = attachTimeout(setIsEditTimedOut, editControllerRef)
     setIsSavingEdit(true)
     setEditError(null)
     try {
@@ -187,6 +204,7 @@ export function LibraryPage() {
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title: editTitle.trim(), content: nextContent }),
+        signal: editControllerRef.current?.signal,
       })
       const payload = (await res.json()) as SavedText & { error?: string }
       if (!res.ok) {
@@ -195,22 +213,31 @@ export function LibraryPage() {
       }
       setTexts((prev) => prev.map((t) => (t.id === payload.id ? payload : t)))
       setEditingText(null)
+    } catch (error) {
+      if ((error as Error).name === 'AbortError') return
+      setEditError('Unexpected error while saving.')
     } finally {
+      clearTimer()
       setIsSavingEdit(false)
     }
   }
 
   const handleConfirmDelete = async () => {
     if (!deletingText) return
+    const clearTimer = attachTimeout(setIsDeleteTimedOut, deleteControllerRef)
     setIsDeleting(true)
     try {
       await fetch(`${API_BASE_URL}/api/library/${deletingText.id}`, {
         method: 'DELETE',
         credentials: 'include',
+        signal: deleteControllerRef.current?.signal,
       })
       setTexts((prev) => prev.filter((t) => t.id !== deletingText.id))
       setDeletingText(null)
+    } catch (error) {
+      if ((error as Error).name === 'AbortError') return
     } finally {
+      clearTimer()
       setIsDeleting(false)
     }
   }
@@ -237,7 +264,15 @@ export function LibraryPage() {
 
           <div className="mt-8">
             {isLoading ? (
-              <p className="text-sm text-[#8d7c6f]">Loading…</p>
+              <LoadingCard
+                timedOut={isLoadingTimedOut}
+                onRetry={() => void loadLibrary()}
+                onCancel={() => {
+                  loadingControllerRef.current?.abort()
+                  setIsLoading(false)
+                }}
+                message="Loading library…"
+              />
             ) : !isAuthenticated ? (
               <div className="rounded-xl border border-dashed border-[#d8cab8] bg-[#fffdf9] p-8 text-center">
                 <p className="text-sm font-semibold text-[#66594f]">
@@ -355,8 +390,11 @@ export function LibraryPage() {
                 type="button"
                 onClick={handleSaveEdit}
                 disabled={isSavingEdit}
-                className="rounded-xl bg-[#d1451b] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#b63e19] disabled:opacity-60"
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#d1451b] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#b63e19] disabled:opacity-60"
               >
+                {isSavingEdit && (
+                  <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                )}
                 {isSavingEdit ? 'Saving…' : 'Save changes'}
               </button>
               <button
@@ -367,6 +405,15 @@ export function LibraryPage() {
                 Cancel
               </button>
             </div>
+            {isSavingEdit && isEditTimedOut && (
+              <RetryPrompt
+                onRetry={() => void handleSaveEdit()}
+                onCancel={() => {
+                  editControllerRef.current?.abort()
+                  setIsSavingEdit(false)
+                }}
+              />
+            )}
           </div>
         </div>
       ) : null}
@@ -384,8 +431,11 @@ export function LibraryPage() {
                 type="button"
                 onClick={handleConfirmDelete}
                 disabled={isDeleting}
-                className="rounded-xl bg-[#b42020] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#941c1c] disabled:opacity-60"
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#b42020] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#941c1c] disabled:opacity-60"
               >
+                {isDeleting && (
+                  <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                )}
                 {isDeleting ? 'Deleting…' : 'Delete'}
               </button>
               <button
@@ -396,6 +446,15 @@ export function LibraryPage() {
                 Cancel
               </button>
             </div>
+            {isDeleting && isDeleteTimedOut && (
+              <RetryPrompt
+                onRetry={() => void handleConfirmDelete()}
+                onCancel={() => {
+                  deleteControllerRef.current?.abort()
+                  setIsDeleting(false)
+                }}
+              />
+            )}
           </div>
         </div>
       ) : null}

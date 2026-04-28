@@ -1,6 +1,8 @@
-import { type FormEvent, useCallback, useEffect, useState } from 'react'
+import { type FormEvent, useCallback, useEffect, useRef, useState } from 'react'
 import { Download } from 'lucide-react'
 import { API_BASE_URL } from '../lib/apiBase'
+import { attachTimeout } from '../lib/requestUtils'
+import { LoadingCard, RetryPrompt } from '../components/LoadingWithRetry'
 
 const buildApiUrl = (path: string, searchParams?: URLSearchParams) => {
   const base = API_BASE_URL.replace(/\/$/, '')
@@ -156,7 +158,12 @@ function TrashIcon() {
 export function FlashcardReviewPage() {
   const [cards, setCards] = useState<FlashcardData[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [isLoadingTimedOut, setIsLoadingTimedOut] = useState(false)
+  const loadingControllerRef = useRef<AbortController | null>(null)
   const [isSubmittingReview, setIsSubmittingReview] = useState(false)
+  const [isReviewTimedOut, setIsReviewTimedOut] = useState(false)
+  const reviewControllerRef = useRef<AbortController | null>(null)
+  const [pendingRating, setPendingRating] = useState<Rating | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [isFlipped, setIsFlipped] = useState(false)
   const [isComplete, setIsComplete] = useState(false)
@@ -165,14 +172,20 @@ export function FlashcardReviewPage() {
   const [viewMode, setViewMode] = useState<'review' | 'table'>('review')
   const [allCards, setAllCards] = useState<FlashcardData[]>([])
   const [isLoadingAll, setIsLoadingAll] = useState(false)
+  const [isLoadingAllTimedOut, setIsLoadingAllTimedOut] = useState(false)
+  const loadingAllControllerRef = useRef<AbortController | null>(null)
   const [showPinyin, setShowPinyin] = useState(true)
   const [editingCard, setEditingCard] = useState<FlashcardData | null>(null)
   const [editWord, setEditWord] = useState('')
   const [editPinyin, setEditPinyin] = useState('')
   const [editMeaning, setEditMeaning] = useState('')
   const [isSavingEdit, setIsSavingEdit] = useState(false)
+  const [isEditTimedOut, setIsEditTimedOut] = useState(false)
+  const editControllerRef = useRef<AbortController | null>(null)
   const [deletingCardId, setDeletingCardId] = useState<number | null>(null)
   const [isExportingCsv, setIsExportingCsv] = useState(false)
+  const [isExportTimedOut, setIsExportTimedOut] = useState(false)
+  const exportControllerRef = useRef<AbortController | null>(null)
 
   const hasCards = cards.length > 0
   const currentCard = hasCards ? cards[0] : null
@@ -180,6 +193,7 @@ export function FlashcardReviewPage() {
   const reviewedCards = Math.max(0, initialDueCount - remainingCards)
 
   const loadFlashcards = useCallback(async (showCompletionOnEmpty = false) => {
+    const clearTimer = attachTimeout(setIsLoadingTimedOut, loadingControllerRef)
     setIsLoading(true)
     setErrorMessage(null)
 
@@ -192,6 +206,7 @@ export function FlashcardReviewPage() {
         headers: {
           Accept: 'application/json',
         },
+        signal: loadingControllerRef.current?.signal,
       })
 
       const payload = await parseApiJson<{
@@ -241,9 +256,11 @@ export function FlashcardReviewPage() {
       setIsFlipped(false)
       setIsComplete(showCompletionOnEmpty && dueCount === 0)
     } catch (error) {
+      if ((error as Error).name === 'AbortError') return
       const message = error instanceof Error ? error.message : 'Unexpected error while loading flashcards.'
       setErrorMessage(message)
     } finally {
+      clearTimer()
       setIsLoading(false)
     }
   }, [])
@@ -253,6 +270,7 @@ export function FlashcardReviewPage() {
   }, [loadFlashcards])
 
   const loadAllFlashcards = useCallback(async () => {
+    const clearTimer = attachTimeout(setIsLoadingAllTimedOut, loadingAllControllerRef)
     setIsLoadingAll(true)
     setErrorMessage(null)
     try {
@@ -260,6 +278,7 @@ export function FlashcardReviewPage() {
         method: 'GET',
         credentials: 'include',
         headers: { Accept: 'application/json' },
+        signal: loadingAllControllerRef.current?.signal,
       })
       const payload = await parseApiJson<{
         error?: unknown
@@ -296,9 +315,11 @@ export function FlashcardReviewPage() {
       validRows.sort((a, b) => new Date(a.due_at).getTime() - new Date(b.due_at).getTime())
       setAllCards(validRows)
     } catch (error) {
+      if ((error as Error).name === 'AbortError') return
       const message = error instanceof Error ? error.message : 'Unexpected error while loading flashcards.'
       setErrorMessage(message)
     } finally {
+      clearTimer()
       setIsLoadingAll(false)
     }
   }, [])
@@ -340,6 +361,7 @@ export function FlashcardReviewPage() {
       return
     }
 
+    const clearTimer = attachTimeout(setIsEditTimedOut, editControllerRef)
     setIsSavingEdit(true)
     setErrorMessage(null)
 
@@ -352,6 +374,7 @@ export function FlashcardReviewPage() {
           Accept: 'application/json',
         },
         body: JSON.stringify({ word, pinyin, meaning }),
+        signal: editControllerRef.current?.signal,
       })
 
       const payload = await parseApiJson<{ error?: unknown }>(response)
@@ -365,9 +388,11 @@ export function FlashcardReviewPage() {
       void loadFlashcards()
       closeEditModal()
     } catch (error) {
+      if ((error as Error).name === 'AbortError') return
       const message = error instanceof Error ? error.message : 'Unexpected error while updating flashcard.'
       setErrorMessage(message)
     } finally {
+      clearTimer()
       setIsSavingEdit(false)
     }
   }
@@ -404,6 +429,7 @@ export function FlashcardReviewPage() {
   }
 
   const handleExportCsv = async () => {
+    const clearTimer = attachTimeout(setIsExportTimedOut, exportControllerRef)
     setIsExportingCsv(true)
     setErrorMessage(null)
 
@@ -411,6 +437,7 @@ export function FlashcardReviewPage() {
       const response = await fetch(buildApiUrl('/api/flashcards/export'), {
         method: 'GET',
         credentials: 'include',
+        signal: exportControllerRef.current?.signal,
       })
 
       if (!response.ok) {
@@ -446,9 +473,11 @@ export function FlashcardReviewPage() {
       document.body.removeChild(link)
       window.URL.revokeObjectURL(objectUrl)
     } catch (error) {
+      if ((error as Error).name === 'AbortError') return
       const message = error instanceof Error ? error.message : 'Unexpected error while exporting flashcards.'
       setErrorMessage(message)
     } finally {
+      clearTimer()
       setIsExportingCsv(false)
     }
   }
@@ -485,6 +514,8 @@ export function FlashcardReviewPage() {
   const handleRating = async (rating: Rating) => {
     if (!currentCard) return
 
+    setPendingRating(rating)
+    const clearTimer = attachTimeout(setIsReviewTimedOut, reviewControllerRef)
     setIsSubmittingReview(true)
     setErrorMessage(null)
 
@@ -497,6 +528,7 @@ export function FlashcardReviewPage() {
           Accept: 'application/json',
         },
         body: JSON.stringify({ rating }),
+        signal: reviewControllerRef.current?.signal,
       })
 
       const payload = await parseApiJson<{ error?: unknown }>(response)
@@ -507,10 +539,13 @@ export function FlashcardReviewPage() {
 
       await loadFlashcards(true)
     } catch (error) {
+      if ((error as Error).name === 'AbortError') return
       const message = error instanceof Error ? error.message : 'Unexpected error while saving review.'
       setErrorMessage(message)
     } finally {
+      clearTimer()
       setIsSubmittingReview(false)
+      setPendingRating(null)
     }
   }
 
@@ -550,11 +585,17 @@ export function FlashcardReviewPage() {
         {viewMode === 'review' ? (
           <>
             {isLoading ? (
-              <div className="flex items-center justify-center h-96">
-                <div className="text-center">
-                  <p className="text-xl font-semibold text-[#75695f]">Loading flashcards...</p>
-                </div>
-              </div>
+              <LoadingCard
+                timedOut={isLoadingTimedOut}
+                onRetry={() => void loadFlashcards()}
+                onCancel={() => {
+                  loadingControllerRef.current?.abort()
+                  setIsLoading(false)
+                  setErrorMessage('Loading cancelled.')
+                }}
+                message="Loading flashcards…"
+                className="h-96"
+              />
             ) : errorMessage ? (
               <div className="flex items-center justify-center h-96">
                 <div className="text-center max-w-md">
@@ -680,36 +721,56 @@ export function FlashcardReviewPage() {
 
             {/* Rating Buttons */}
             {isFlipped && (
+              <>
               <div className="grid grid-cols-4 gap-3">
                 <button
                   onClick={() => void handleRating('again')}
                   disabled={isSubmittingReview}
                   className="py-3 px-4 rounded-lg bg-[#ff6b6b] text-white font-semibold text-sm transition hover:-translate-y-0.5 hover:bg-[#ff5252] shadow-lg shadow-[#ff6b6b]/20 active:translate-y-0"
                 >
-                  Again
+                  {isSubmittingReview && pendingRating === 'again'
+                    ? <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                    : 'Again'}
                 </button>
                 <button
                   onClick={() => void handleRating('hard')}
                   disabled={isSubmittingReview}
                   className="py-3 px-4 rounded-lg bg-[#ffa94d] text-white font-semibold text-sm transition hover:-translate-y-0.5 hover:bg-[#ff922b] shadow-lg shadow-[#ffa94d]/20 active:translate-y-0"
                 >
-                  Hard
+                  {isSubmittingReview && pendingRating === 'hard'
+                    ? <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                    : 'Hard'}
                 </button>
                 <button
                   onClick={() => void handleRating('good')}
                   disabled={isSubmittingReview}
                   className="py-3 px-4 rounded-lg bg-[#74b446] text-white font-semibold text-sm transition hover:-translate-y-0.5 hover:bg-[#5a9838] shadow-lg shadow-[#74b446]/20 active:translate-y-0"
                 >
-                  Good
+                  {isSubmittingReview && pendingRating === 'good'
+                    ? <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                    : 'Good'}
                 </button>
                 <button
                   onClick={() => void handleRating('easy')}
                   disabled={isSubmittingReview}
                   className="py-3 px-4 rounded-lg bg-[#15aabf] text-white font-semibold text-sm transition hover:-translate-y-0.5 hover:bg-[#1098ad] shadow-lg shadow-[#15aabf]/20 active:translate-y-0"
                 >
-                  Easy
+                  {isSubmittingReview && pendingRating === 'easy'
+                    ? <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                    : 'Easy'}
                 </button>
               </div>
+              {isSubmittingReview && isReviewTimedOut && pendingRating && (
+                <RetryPrompt
+                  onRetry={() => void handleRating(pendingRating)}
+                  onCancel={() => {
+                    reviewControllerRef.current?.abort()
+                    setIsSubmittingReview(false)
+                    setPendingRating(null)
+                  }}
+                />
+              )}
+              </>
             )}
 
                 {/* Card footer - hidden until revealed */}
@@ -730,9 +791,16 @@ export function FlashcardReviewPage() {
           // Table view
           <>
             {isLoadingAll ? (
-              <div className="flex items-center justify-center h-64">
-                <p className="text-xl font-semibold text-[#75695f]">Loading flashcards...</p>
-              </div>
+              <LoadingCard
+                timedOut={isLoadingAllTimedOut}
+                onRetry={() => void loadAllFlashcards()}
+                onCancel={() => {
+                  loadingAllControllerRef.current?.abort()
+                  setIsLoadingAll(false)
+                  setErrorMessage('Loading cancelled.')
+                }}
+                message="Loading flashcards…"
+              />
             ) : errorMessage ? (
               <div className="flex items-center justify-center h-64">
                 <p className="text-xl font-semibold text-[#8c2f11]">{errorMessage}</p>
@@ -752,13 +820,24 @@ export function FlashcardReviewPage() {
                       disabled={isExportingCsv}
                       className="inline-flex items-center gap-2 rounded-lg bg-[#d1451b] px-4 py-2 font-semibold text-white transition hover:bg-[#b63e19] disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                      <Download className="h-4 w-4" aria-hidden="true" />
-                      {isExportingCsv ? 'Exporting...' : 'Export CSV'}
+                      {isExportingCsv
+                        ? <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                        : <Download className="h-4 w-4" aria-hidden="true" />}
+                      {isExportingCsv ? 'Exporting…' : 'Export CSV'}
                     </button>
                     <p className="text-sm text-[#75695f]">
                       {allCards.length} card{allCards.length === 1 ? '' : 's'} total
                     </p>
                   </div>
+                  {isExportingCsv && isExportTimedOut && (
+                    <RetryPrompt
+                      onRetry={() => void handleExportCsv()}
+                      onCancel={() => {
+                        exportControllerRef.current?.abort()
+                        setIsExportingCsv(false)
+                      }}
+                    />
+                  )}
                 </div>
                 <div className="overflow-x-auto rounded-2xl border border-[#d6c7b6] bg-white shadow-lg shadow-[#bf9f83]/10">
                   <table className="w-full text-sm">
@@ -888,11 +967,25 @@ export function FlashcardReviewPage() {
                           <button
                             type="submit"
                             disabled={isSavingEdit}
-                            className="rounded-lg bg-[#d1451b] px-4 py-2 font-semibold text-white transition hover:bg-[#b63e19] disabled:cursor-not-allowed disabled:opacity-60"
+                            className="inline-flex items-center gap-2 rounded-lg bg-[#d1451b] px-4 py-2 font-semibold text-white transition hover:bg-[#b63e19] disabled:cursor-not-allowed disabled:opacity-60"
                           >
-                            {isSavingEdit ? 'Saving...' : 'Save changes'}
+                            {isSavingEdit && (
+                              <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                            )}
+                            {isSavingEdit ? 'Saving…' : 'Save changes'}
                           </button>
                         </div>
+                        {isSavingEdit && isEditTimedOut && (
+                          <RetryPrompt
+                            onRetry={() => {
+                              if (editingCard) void handleEditSubmit({ preventDefault: () => {} } as FormEvent<HTMLFormElement>)
+                            }}
+                            onCancel={() => {
+                              editControllerRef.current?.abort()
+                              setIsSavingEdit(false)
+                            }}
+                          />
+                        )}
                       </form>
                     </div>
                   </div>

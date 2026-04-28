@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { HskWordSelector } from '../components/HskWordSelector'
+import { RetryPrompt } from '../components/LoadingWithRetry'
 import { API_BASE_URL } from '../lib/apiBase'
+import { attachTimeout } from '../lib/requestUtils'
 
 
 type ScreeningWord = {
@@ -41,7 +43,11 @@ export function PastePage() {
   const [screening, setScreening] = useState<ScreeningPayload | null>(null)
   const [selectedWords, setSelectedWords] = useState<string[]>([])
   const [isScreening, setIsScreening] = useState(false)
+  const [isScreeningTimedOut, setIsScreeningTimedOut] = useState(false)
+  const screeningControllerRef = useRef<AbortController | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isSubmittingTimedOut, setIsSubmittingTimedOut] = useState(false)
+  const submittingControllerRef = useRef<AbortController | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
   useEffect(() => {
@@ -82,15 +88,8 @@ export function PastePage() {
     setSelectedWords((current) => current.filter((word) => !groupWords.has(word)))
   }
 
-  const handleScreening = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-
-    const trimmedText = text.trim()
-    if (!trimmedText) {
-      setErrorMessage('Please paste Mandarin text before starting vocabulary selection.')
-      return
-    }
-
+  const doScreening = async (trimmedText: string) => {
+    const clearTimer = attachTimeout(setIsScreeningTimedOut, screeningControllerRef)
     setIsScreening(true)
     setErrorMessage(null)
 
@@ -101,6 +100,7 @@ export function PastePage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ text: trimmedText }),
+        signal: screeningControllerRef.current?.signal,
       })
 
       const payload = (await response.json()) as Partial<ScreeningPayload> & { error?: unknown }
@@ -118,20 +118,29 @@ export function PastePage() {
       })
       setSelectedWords([])
     } catch (error) {
+      if ((error as Error).name === 'AbortError') return
       const message = error instanceof Error ? error.message : 'Unexpected error while loading vocabulary screen.'
       setErrorMessage(message)
     } finally {
+      clearTimer()
       setIsScreening(false)
     }
   }
 
-  const handleAnalyze = async () => {
+  const handleScreening = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+
     const trimmedText = text.trim()
     if (!trimmedText) {
-      setErrorMessage('Please paste Mandarin text before analyzing.')
+      setErrorMessage('Please paste Mandarin text before starting vocabulary selection.')
       return
     }
 
+    await doScreening(trimmedText)
+  }
+
+  const doAnalyze = async (trimmedText: string) => {
+    const clearTimer = attachTimeout(setIsSubmittingTimedOut, submittingControllerRef)
     setIsSubmitting(true)
     setErrorMessage(null)
 
@@ -146,6 +155,7 @@ export function PastePage() {
           text: trimmedText,
           vocab_text: selectedWords.join(' '),
         }),
+        signal: submittingControllerRef.current?.signal,
       })
 
       const payload = (await response.json()) as Record<string, unknown>
@@ -166,11 +176,23 @@ export function PastePage() {
         },
       })
     } catch (error) {
+      if ((error as Error).name === 'AbortError') return
       const message = error instanceof Error ? error.message : 'Unexpected error while analyzing text.'
       setErrorMessage(message)
     } finally {
+      clearTimer()
       setIsSubmitting(false)
     }
+  }
+
+  const handleAnalyze = () => {
+    const trimmedText = text.trim()
+    if (!trimmedText) {
+      setErrorMessage('Please paste Mandarin text before analyzing.')
+      return
+    }
+
+    void doAnalyze(trimmedText)
   }
 
   if (screening) {
@@ -207,11 +229,23 @@ export function PastePage() {
               type="button"
               onClick={handleAnalyze}
               disabled={isSubmitting}
-              className="rounded-xl bg-[#d1451b] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#b63e19] disabled:cursor-not-allowed disabled:opacity-70"
+              className="inline-flex items-center gap-2 rounded-xl bg-[#d1451b] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#b63e19] disabled:cursor-not-allowed disabled:opacity-70"
             >
-              {isSubmitting ? 'Loading...' : 'Confirm'}
+              {isSubmitting && (
+                <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+              )}
+              {isSubmitting ? 'Loading…' : 'Confirm'}
             </button>
           </div>
+          {isSubmitting && isSubmittingTimedOut && (
+            <RetryPrompt
+              onRetry={() => handleAnalyze()}
+              onCancel={() => {
+                submittingControllerRef.current?.abort()
+                setIsSubmitting(false)
+              }}
+            />
+          )}
         </section>
       </main>
     )
@@ -240,11 +274,23 @@ export function PastePage() {
             <button
               type="submit"
               disabled={isScreening}
-              className="rounded-xl bg-[#d1451b] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#b63e19] disabled:cursor-not-allowed disabled:opacity-70"
+              className="inline-flex items-center gap-2 rounded-xl bg-[#d1451b] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#b63e19] disabled:cursor-not-allowed disabled:opacity-70"
             >
-              {isScreening ? 'Loading...' : 'Analyze'}
+              {isScreening && (
+                <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+              )}
+              {isScreening ? 'Loading…' : 'Analyze'}
             </button>
           </div>
+          {isScreening && isScreeningTimedOut && (
+            <RetryPrompt
+              onRetry={() => { void doScreening(text.trim()) }}
+              onCancel={() => {
+                screeningControllerRef.current?.abort()
+                setIsScreening(false)
+              }}
+            />
+          )}
         </form>
       </section>
     </main>

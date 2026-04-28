@@ -1,7 +1,9 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { API_BASE_URL } from '../lib/apiBase'
+import { attachTimeout } from '../lib/requestUtils'
+import { RetryPrompt } from '../components/LoadingWithRetry'
 
 function EyeIcon({ open }: { open: boolean }) {
   return open ? (
@@ -28,6 +30,8 @@ export function SignupPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isSubmittingTimedOut, setIsSubmittingTimedOut] = useState(false)
+  const submittingControllerRef = useRef<AbortController | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -44,6 +48,7 @@ export function SignupPage() {
       return
     }
 
+    const clearTimer = attachTimeout(setIsSubmittingTimedOut, submittingControllerRef)
     setIsSubmitting(true)
     setErrorMessage(null)
 
@@ -53,6 +58,7 @@ export function SignupPage() {
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: trimmedUsername, email: trimmedEmail, password }),
+        signal: submittingControllerRef.current?.signal,
       })
 
       const payload = (await response.json()) as Record<string, unknown>
@@ -63,8 +69,10 @@ export function SignupPage() {
 
       navigate('/')
     } catch (error) {
+      if ((error as Error).name === 'AbortError') return
       setErrorMessage(error instanceof Error ? error.message : 'Unexpected error.')
     } finally {
+      clearTimer()
       setIsSubmitting(false)
     }
   }
@@ -147,10 +155,22 @@ export function SignupPage() {
           <button
             type="submit"
             disabled={isSubmitting}
-            className="w-full rounded-xl bg-[#d1451b] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#b63e19] disabled:cursor-not-allowed disabled:opacity-70"
+            className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#d1451b] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#b63e19] disabled:cursor-not-allowed disabled:opacity-70"
           >
+            {isSubmitting && (
+              <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+            )}
             {isSubmitting ? 'Please wait…' : 'Create Account'}
           </button>
+          {isSubmitting && isSubmittingTimedOut && (
+            <RetryPrompt
+              onRetry={() => void handleSubmit({ preventDefault: () => {} } as FormEvent<HTMLFormElement>)}
+              onCancel={() => {
+                submittingControllerRef.current?.abort()
+                setIsSubmitting(false)
+              }}
+            />
+          )}
         </form>
 
         <p className="mt-5 text-center text-sm text-[#66594f]">
