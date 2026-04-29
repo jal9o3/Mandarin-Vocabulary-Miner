@@ -30,4 +30,4 @@ services:
       - key: CORS_ALLOWED_ORIGIN_REGEXES
         value: ^https://.*\\.vercel\\.app$
       - key: WEB_CONCURRENCY
-        value: 4
+        value: 1

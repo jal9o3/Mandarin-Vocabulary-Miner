@@ -1,13 +1,12 @@
 import json
 import csv
-import io
 from datetime import timedelta
 
 from django.contrib.auth import authenticate, login, logout, update_session_auth_hash
 from django.contrib.auth.models import User
 from django.conf import settings
 from django.db import transaction
-from django.http import HttpRequest, JsonResponse, HttpResponse
+from django.http import HttpRequest, JsonResponse, HttpResponse, StreamingHttpResponse
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_http_methods
@@ -18,6 +17,8 @@ from .services import analyze_text, build_vocab_screen, compute_text_hsk_level, 
 
 VOCAB_FILE = settings.BASE_DIR / "vocab.txt"
 MINIMUM_EASE_FACTOR = 1.3
+MAX_ANALYZE_TEXT_CHARS = 60_000
+MAX_ANALYZE_UPLOAD_BYTES = 5 * 1024 * 1024
 
 
 def _split_meanings(meaning_text: str) -> list[str]:
@@ -125,6 +126,21 @@ def _string_field(payload: dict, key: str) -> str | None:
         normalized = value.strip()
         if normalized:
             return normalized
+    return None
+
+
+def _validate_text_length(text: str, *, field_name: str = "text") -> JsonResponse | None:
+    if len(text) > MAX_ANALYZE_TEXT_CHARS:
+        return JsonResponse(
+            {
+                "error": (
+                    f"Field '{field_name}' is too large. "
+                    f"Maximum allowed length is {MAX_ANALYZE_TEXT_CHARS} characters."
+                )
+            },
+            status=413,
+        )
+
     return None
 
 
@@ -277,6 +293,10 @@ def vocab_screen_view(request: HttpRequest) -> JsonResponse:
     if not isinstance(text, str):
         return JsonResponse({"error": "Field 'text' must be a string."}, status=400)
 
+    too_large = _validate_text_length(text)
+    if too_large is not None:
+        return too_large
+
     screening = build_vocab_screen(text)
     return JsonResponse(screening)
 
@@ -289,6 +309,10 @@ def analyze_text_view(request: HttpRequest) -> JsonResponse:
 
     if not isinstance(text, str):
         return JsonResponse({"error": "Field 'text' must be a string."}, status=400)
+
+    too_large = _validate_text_length(text)
+    if too_large is not None:
+        return too_large
 
     vocab_text = payload.get("vocab_text")
     if not isinstance(vocab_text, str):
@@ -315,10 +339,20 @@ def analyze_file_view(request: HttpRequest) -> JsonResponse:
     if upload is None:
         return JsonResponse({"error": "Upload a file in form field 'file'."}, status=400)
 
+    if upload.size > MAX_ANALYZE_UPLOAD_BYTES:
+        return JsonResponse(
+            {"error": f"Uploaded file is too large. Maximum allowed size is {MAX_ANALYZE_UPLOAD_BYTES // (1024 * 1024)} MB."},
+            status=413,
+        )
+
     try:
         text = upload.read().decode("utf-8")
     except UnicodeDecodeError:
         return JsonResponse({"error": "File must be UTF-8 encoded text."}, status=400)
+
+    too_large = _validate_text_length(text, field_name="file")
+    if too_large is not None:
+        return too_large
 
     vocab_text = request.POST.get("vocab_text")
     if not isinstance(vocab_text, str):
@@ -490,17 +524,22 @@ def export_flashcards_csv_view(request: HttpRequest) -> HttpResponse:
         .order_by("word__text", "id")
     )
 
-    buffer = io.StringIO()
-    writer = csv.writer(buffer)
-    writer.writerow(["Front", "Back"])
+    class Echo:
+        def write(self, value: str) -> str:
+            return value
 
-    for flashcard in flashcards:
-        pinyin = flashcard.word.pinyin.strip()
-        meaning = flashcard.meaning.strip()
-        back = f"{pinyin}\n{meaning}" if pinyin else meaning
-        writer.writerow([flashcard.word.text, back])
+    pseudo_buffer = Echo()
+    writer = csv.writer(pseudo_buffer)
 
-    response = HttpResponse(buffer.getvalue(), content_type="text/csv; charset=utf-8")
+    def row_stream():
+        yield writer.writerow(["Front", "Back"])
+        for flashcard in flashcards.iterator(chunk_size=200):
+            pinyin = flashcard.word.pinyin.strip()
+            meaning = flashcard.meaning.strip()
+            back = f"{pinyin}\n{meaning}" if pinyin else meaning
+            yield writer.writerow([flashcard.word.text, back])
+
+    response = StreamingHttpResponse(row_stream(), content_type="text/csv; charset=utf-8")
     response["Content-Disposition"] = 'attachment; filename="hanlearn-flashcards.csv"'
     return response
 
