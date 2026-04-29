@@ -283,6 +283,7 @@ export function LibraryPage() {
               <LoadingCard
                 busy={isLoadingTimedOut}
                 message="Loading library…"
+                showCountdown={false}
               />
             ) : !isAuthenticated ? (
               <div className="rounded-xl border border-dashed border-[#d8cab8] bg-[#fffdf9] p-8 text-center">

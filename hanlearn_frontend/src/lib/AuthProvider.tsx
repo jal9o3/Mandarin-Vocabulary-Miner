@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useLocation } from 'react-router-dom'
 
-import { BusyRetryBanner } from '../components/LoadingWithRetry'
 import { isAbortError, isBackendConnectionFailure } from './requestUtils'
 import { AuthContext, requestAuthState } from './auth'
 import type { AuthContextValue, AuthStatus, RefreshAuthOptions } from './auth'
@@ -130,7 +129,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         <div className="flex min-h-screen flex-col items-center justify-center gap-5 bg-[#fffbf4] px-6 text-center">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-[#d1451b] border-t-transparent" />
           <div className="max-w-xl w-full">
-            <BusyRetryBanner active={initAuthTimedOut} />
+            <p className="rounded-xl border border-[#e9d4c8] bg-[#fff8f5] px-4 py-3 text-sm text-[#7c5a4e]">
+              Server is busy. You can wait or continue without signing in.
+            </p>
           </div>
           <div className="flex gap-3">
             <button

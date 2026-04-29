@@ -68,6 +68,7 @@ type LoadingCardProps = {
   onExhausted?: () => void
   message?: string
   className?: string
+  showCountdown?: boolean
 }
 
 export function LoadingCard({
@@ -75,6 +76,7 @@ export function LoadingCard({
   onExhausted,
   message = 'Loading…',
   className = 'h-64',
+  showCountdown = true,
 }: LoadingCardProps) {
   const { secondsRemaining, isExhausted } = useRetryCountdown(busy, onExhausted)
 
@@ -82,7 +84,7 @@ export function LoadingCard({
     <div className={`flex flex-col items-center justify-center gap-4 ${className}`}>
       <div className="h-8 w-8 animate-spin rounded-full border-4 border-[#d1451b] border-t-transparent" />
       <p className="text-[#75695f]">{message}</p>
-      {busy ? (
+      {busy && showCountdown ? (
         <p className="text-sm text-[#7c5a4e]">
           {isExhausted
             ? 'Server unable to respond. Please try again later.'

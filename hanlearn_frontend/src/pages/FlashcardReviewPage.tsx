@@ -605,6 +605,7 @@ export function FlashcardReviewPage() {
                 busy={isLoadingTimedOut}
                 message="Loading flashcards…"
                 className="h-96"
+                showCountdown={false}
               />
             ) : errorMessage ? (
               <div className="flex items-center justify-center h-96">
@@ -800,6 +801,7 @@ export function FlashcardReviewPage() {
               <LoadingCard
                 busy={isLoadingAllTimedOut}
                 message="Loading flashcards…"
+                showCountdown={false}
               />
             ) : errorMessage ? (
               <div className="flex items-center justify-center h-64">

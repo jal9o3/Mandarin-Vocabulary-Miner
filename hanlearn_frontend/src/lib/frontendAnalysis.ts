@@ -66,6 +66,21 @@ type WordlistBundle = {
 }
 
 let wordlistBundlePromise: Promise<WordlistBundle> | null = null
+type CedictEntry = {
+  pinyin: string
+  english: string[]
+}
+
+type CedictResults = Record<string, CedictEntry[]> | CedictEntry[] | null
+
+type CedictClient = {
+  getBySimplified: (word: string, pinyin?: string | null, configOverrides?: Record<string, unknown>) => CedictResults
+}
+
+let cedictPromise: Promise<CedictClient | null> | null = null
+const cedictWordCache = new Map<string, PriorityInfo | null>()
+const DEFAULT_CEDICT_CDN_ENTRY = 'https://cdn.jsdelivr.net/npm/cc-cedict@1.1.1/dist/index.js'
+const CEDICT_CDN_ENTRY = import.meta.env.VITE_CEDICT_CDN_ENTRY || DEFAULT_CEDICT_CDN_ENTRY
 
 function removePunctuation(text: string): string {
   if (!text) {
@@ -383,6 +398,121 @@ function resolvePriorityInfo(word: string, wordInfoLookup: Map<string, PriorityI
   return buildFallbackPriorityInfo(word, wordInfoLookup)
 }
 
+function shouldUseCedictFallback(info: PriorityInfo): boolean {
+  const hasMeaningFallbackOnly = info.meanings.length === 1 && info.meanings[0] === NO_MEANING_FALLBACK
+  const hasNoPronunciation = info.pronunciation === NO_PRONUNCIATION_FALLBACK
+  return hasMeaningFallbackOnly || hasNoPronunciation
+}
+
+function normalizeCedictResults(results: CedictResults): CedictEntry[] {
+  if (!results) {
+    return []
+  }
+
+  if (Array.isArray(results)) {
+    return results
+  }
+
+  const entries: CedictEntry[] = []
+  for (const group of Object.values(results)) {
+    if (!Array.isArray(group)) {
+      continue
+    }
+
+    for (const entry of group) {
+      entries.push(entry)
+    }
+  }
+
+  return entries
+}
+
+async function getCedictClient(): Promise<CedictClient | null> {
+  if (!cedictPromise) {
+    cedictPromise = import(/* @vite-ignore */ CEDICT_CDN_ENTRY)
+      .then((module) => {
+        const candidate = (module as { default?: unknown }).default
+        if (!candidate || typeof candidate !== 'object') {
+          return null
+        }
+
+        const maybeClient = candidate as Partial<CedictClient>
+        if (typeof maybeClient.getBySimplified !== 'function') {
+          return null
+        }
+
+        return maybeClient as CedictClient
+      })
+      .catch(() => null)
+  }
+
+  return cedictPromise
+}
+
+function lookupCedictInfo(word: string, cedict: CedictClient): PriorityInfo | null {
+  const results = normalizeCedictResults(cedict.getBySimplified(word, null, { mergeCases: true, asObject: true }))
+  if (!results.length) {
+    return null
+  }
+
+  let pronunciation = ''
+  let meanings: string[] = []
+
+  for (const entry of results) {
+    const nextPronunciation = entry.pinyin.trim()
+    if (!pronunciation && nextPronunciation) {
+      pronunciation = nextPronunciation
+    }
+    meanings = mergeMeanings(meanings, entry.english.map((meaning) => meaning.trim()).filter((meaning) => meaning.length > 0))
+  }
+
+  if (!pronunciation && !meanings.length) {
+    return null
+  }
+
+  return {
+    pronunciation,
+    meanings,
+  }
+}
+
+async function resolvePriorityInfoWithCedict(word: string, wordInfoLookup: Map<string, PriorityInfo>): Promise<PriorityInfo> {
+  const localInfo = resolvePriorityInfo(word, wordInfoLookup)
+  if (!shouldUseCedictFallback(localInfo)) {
+    return localInfo
+  }
+
+  if (cedictWordCache.has(word)) {
+    const cached = cedictWordCache.get(word)
+    if (!cached) {
+      return localInfo
+    }
+
+    return {
+      pronunciation: cached.pronunciation || localInfo.pronunciation,
+      meanings: cached.meanings.length ? cached.meanings : localInfo.meanings,
+    }
+  }
+
+  const cedict = await getCedictClient()
+  if (!cedict) {
+    cedictWordCache.set(word, null)
+    return localInfo
+  }
+
+  const cedictInfo = lookupCedictInfo(word, cedict)
+  cedictWordCache.set(word, cedictInfo)
+
+  if (!cedictInfo) {
+    return localInfo
+  }
+
+  return {
+    pronunciation: cedictInfo.pronunciation || localInfo.pronunciation,
+    meanings: cedictInfo.meanings.length ? cedictInfo.meanings : localInfo.meanings,
+  }
+}
+
 export async function buildVocabScreenFrontend(text: string): Promise<ScreeningPayload> {
   const cleaned_text = removePunctuation(text || '')
   const groupsMap = new Map<string, ScreeningWord[]>()
@@ -464,10 +594,14 @@ export async function analyzeTextFrontend(text: string, selectedWords: string[],
   }
 
   const unknown_words = rankedWords.filter((row) => !row.is_known).map((row) => row.word)
-  const priority_drill_set = rankedWords
+  const priorityCandidates = rankedWords
     .filter((row) => !row.is_known && !savedSet.has(row.word))
     .slice(0, 12)
-    .map((row) => ({ word: row.word, info: resolvePriorityInfo(row.word, wordInfoLookup) }))
+
+  const priority_drill_set = await Promise.all(priorityCandidates.map(async (row) => ({
+    word: row.word,
+    info: await resolvePriorityInfoWithCedict(row.word, wordInfoLookup),
+  })))
 
   return {
     cleaned_text,
