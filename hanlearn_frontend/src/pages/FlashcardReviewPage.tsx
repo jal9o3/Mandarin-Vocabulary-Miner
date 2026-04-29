@@ -188,7 +188,6 @@ export function FlashcardReviewPage() {
   const [isExportingCsv, setIsExportingCsv] = useState(false)
   const [isExportTimedOut, setIsExportTimedOut] = useState(false)
   const [isExportTimeoutExhausted, setIsExportTimeoutExhausted] = useState(false)
-  const exportControllerRef = useRef<AbortController | null>(null)
 
   const hasCards = cards.length > 0
   const currentCard = hasCards ? cards[0] : null
@@ -276,7 +275,7 @@ export function FlashcardReviewPage() {
     void loadFlashcards()
   }, [loadFlashcards])
 
-  const loadAllFlashcards = useCallback(async () => {
+  const loadAllFlashcards = useCallback(async (): Promise<FlashcardData[]> => {
     const clearTimer = attachTimeout(setIsLoadingAllTimedOut, loadingAllControllerRef)
     setIsLoadingAll(true)
     setErrorMessage(null)
@@ -321,11 +320,12 @@ export function FlashcardReviewPage() {
       }
       validRows.sort((a, b) => new Date(a.due_at).getTime() - new Date(b.due_at).getTime())
       setAllCards(validRows)
+      return validRows
     } catch (error) {
-      if (isAbortError(error)) return
+      if (isAbortError(error)) return []
       if (isBackendConnectionFailure(error)) {
         setIsLoadingAllTimedOut(true)
-        return
+        return []
       }
       const message = error instanceof Error ? error.message : 'Unexpected error while loading flashcards.'
       setErrorMessage(message)
@@ -333,6 +333,8 @@ export function FlashcardReviewPage() {
       clearTimer()
       setIsLoadingAll(false)
     }
+
+    return []
   }, [])
 
   const handleReviewView = () => {
@@ -445,41 +447,34 @@ export function FlashcardReviewPage() {
   }
 
   const handleExportCsv = async () => {
-    setIsExportTimeoutExhausted(false)
-    const clearTimer = attachTimeout(setIsExportTimedOut, exportControllerRef)
     setIsExportingCsv(true)
+    setIsExportTimedOut(false)
+    setIsExportTimeoutExhausted(false)
     setErrorMessage(null)
 
     try {
-      const response = await fetch(buildApiUrl('/api/flashcards/export'), {
-        method: 'GET',
-        credentials: 'include',
-        signal: exportControllerRef.current?.signal,
-      })
-
-      if (!response.ok) {
-        let message = 'Failed to export flashcards.'
-        const contentType = response.headers.get('content-type') ?? ''
-
-        if (contentType.includes('application/json')) {
-          const payload = await response.json() as { error?: unknown }
-          if (typeof payload.error === 'string') {
-            message = payload.error
-          }
-        } else {
-          const text = (await response.text()).trim()
-          if (text) {
-            message = text
-          }
-        }
-
-        throw new Error(message)
+      let exportRows = allCards
+      if (!exportRows.length) {
+        exportRows = await loadAllFlashcards()
       }
 
-      const blob = await response.blob()
-      const disposition = response.headers.get('content-disposition') ?? ''
-      const filenameMatch = disposition.match(/filename="?([^";]+)"?/i)
-      const filename = filenameMatch?.[1] ?? 'hanlearn-flashcards.csv'
+      if (!exportRows.length) {
+        throw new Error('No flashcards available to export.')
+      }
+
+      const csvEscape = (value: string) => `"${value.replace(/"/g, '""')}"`
+      const csvRows = [
+        'Front,Back',
+        ...exportRows.map((card) => {
+          const pinyin = card.pinyin.trim()
+          const meaning = card.meaning.trim()
+          const back = pinyin ? `${pinyin}\n${meaning}` : meaning
+          return `${csvEscape(card.word)},${csvEscape(back)}`
+        }),
+      ]
+
+      const blob = new Blob([csvRows.join('\n')], { type: 'text/csv;charset=utf-8' })
+      const filename = 'hanlearn-flashcards.csv'
 
       const objectUrl = window.URL.createObjectURL(blob)
       const link = document.createElement('a')
@@ -491,14 +486,9 @@ export function FlashcardReviewPage() {
       window.URL.revokeObjectURL(objectUrl)
     } catch (error) {
       if (isAbortError(error)) return
-      if (isBackendConnectionFailure(error)) {
-        setIsExportTimedOut(true)
-        return
-      }
       const message = error instanceof Error ? error.message : 'Unexpected error while exporting flashcards.'
       setErrorMessage(message)
     } finally {
-      clearTimer()
       setIsExportingCsv(false)
     }
   }

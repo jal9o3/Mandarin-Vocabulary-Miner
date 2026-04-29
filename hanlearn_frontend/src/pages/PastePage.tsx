@@ -4,6 +4,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { HskWordSelector } from '../components/HskWordSelector'
 import { BusyRetryBanner } from '../components/LoadingWithRetry'
 import { API_BASE_URL } from '../lib/apiBase'
+import { analyzeTextFrontend, buildVocabScreenFrontend } from '../lib/frontendAnalysis'
 import { attachTimeout, isAbortError, isBackendConnectionFailure } from '../lib/requestUtils'
 
 
@@ -24,6 +25,9 @@ type ScreeningPayload = {
   total_occurrences: number
   groups: ScreeningGroup[]
 }
+
+const USE_FRONTEND_ANALYSIS = import.meta.env.VITE_FRONTEND_ANALYSIS !== 'false'
+const NO_MEANING_FALLBACK = 'No meaning found in current wordlists.'
 
 type ReturnToSelectionState = {
   text: string
@@ -90,7 +94,7 @@ export function PastePage() {
     setSelectedWords((current) => current.filter((word) => !groupWords.has(word)))
   }
 
-  const doScreening = async (trimmedText: string) => {
+  const doScreeningBackend = async (trimmedText: string) => {
     setIsScreeningTimeoutExhausted(false)
     const clearTimer = attachTimeout(setIsScreeningTimedOut, screeningControllerRef)
     setIsScreening(true)
@@ -134,6 +138,32 @@ export function PastePage() {
     }
   }
 
+  const doScreening = async (trimmedText: string) => {
+    if (!USE_FRONTEND_ANALYSIS) {
+      await doScreeningBackend(trimmedText)
+      return
+    }
+
+    setIsScreening(false)
+    setIsScreeningTimedOut(false)
+    setIsScreeningTimeoutExhausted(false)
+    setErrorMessage(null)
+
+    try {
+      setIsScreening(true)
+      const payload = await buildVocabScreenFrontend(trimmedText)
+      setScreening(payload)
+      setSelectedWords([])
+      return
+    } catch {
+      // Fall back to backend analysis if local wordlist assets are unavailable.
+    } finally {
+      setIsScreening(false)
+    }
+
+    await doScreeningBackend(trimmedText)
+  }
+
   const handleScreening = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
 
@@ -146,7 +176,7 @@ export function PastePage() {
     await doScreening(trimmedText)
   }
 
-  const doAnalyze = async (trimmedText: string) => {
+  const doAnalyzeBackend = async (trimmedText: string) => {
     setIsSubmittingTimeoutExhausted(false)
     const clearTimer = attachTimeout(setIsSubmittingTimedOut, submittingControllerRef)
     setIsSubmitting(true)
@@ -195,6 +225,59 @@ export function PastePage() {
       clearTimer()
       setIsSubmitting(false)
     }
+  }
+
+  const doAnalyze = async (trimmedText: string) => {
+    if (!USE_FRONTEND_ANALYSIS) {
+      await doAnalyzeBackend(trimmedText)
+      return
+    }
+
+    setIsSubmitting(false)
+    setIsSubmittingTimedOut(false)
+    setIsSubmittingTimeoutExhausted(false)
+    setErrorMessage(null)
+
+    try {
+      setIsSubmitting(true)
+      const payload = await analyzeTextFrontend(trimmedText, selectedWords)
+
+      const drillSet = Array.isArray(payload.priority_drill_set) ? payload.priority_drill_set : []
+      const unresolvedCount = drillSet.filter((item) => {
+        const pronunciation = item.info?.pronunciation?.trim() ?? ''
+        const meanings = Array.isArray(item.info?.meanings) ? item.info.meanings : []
+        if (!pronunciation || !meanings.length) {
+          return true
+        }
+
+        return meanings.length === 1 && meanings[0] === NO_MEANING_FALLBACK
+      }).length
+
+      // If almost all priority entries are unresolved, defer to backend enrichment.
+      if (drillSet.length >= 4 && unresolvedCount >= Math.max(drillSet.length - 1, 3)) {
+        await doAnalyzeBackend(trimmedText)
+        return
+      }
+
+      navigate('/analyze', {
+        state: {
+          analysis: payload,
+          sourceText: trimmedText,
+          selectionState: {
+            text: trimmedText,
+            screening,
+            selectedWords,
+          },
+        },
+      })
+      return
+    } catch {
+      // Fall back to backend analysis if local analysis fails.
+    } finally {
+      setIsSubmitting(false)
+    }
+
+    await doAnalyzeBackend(trimmedText)
   }
 
   const handleAnalyze = () => {
