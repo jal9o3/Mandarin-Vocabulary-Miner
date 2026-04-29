@@ -55,9 +55,9 @@ export function BusyRetryBanner({ active, onExhausted }: BusyRetryBannerProps) {
     <div className="mt-3 flex flex-wrap items-center gap-3 rounded-xl border border-[#e9d4c8] bg-[#fff8f5] px-4 py-3 text-sm">
       <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-[#d1451b] border-t-transparent" />
       {isExhausted ? (
-        <span className="text-[#7c5a4e]">Server unable to respond. Please try again later.</span>
+        <span className="text-[#7c5a4e]">We've hit the limits of the server's free plan. Please try again in a few minutes.</span>
       ) : (
-        <span className="text-[#7c5a4e]">Server is busy. Retrying in {secondsRemaining} seconds...</span>
+        <span className="text-[#7c5a4e]">Request is taking a bit long, please wait. Retrying in {secondsRemaining} seconds...</span>
       )}
     </div>
   )
@@ -74,7 +74,7 @@ type LoadingCardProps = {
 export function LoadingCard({
   busy,
   onExhausted,
-  message = 'Loading…',
+  message = 'Processing…',
   className = 'h-64',
   showCountdown = true,
 }: LoadingCardProps) {
@@ -87,8 +87,8 @@ export function LoadingCard({
       {busy && showCountdown ? (
         <p className="text-sm text-[#7c5a4e]">
           {isExhausted
-            ? 'Server unable to respond. Please try again later.'
-            : `Server is busy. Retrying in ${secondsRemaining} seconds...`}
+            ? "We've hit the limits of the server's free plan. Please try again in a few minutes."
+            : `Request is taking a bit long, please wait. Retrying in ${secondsRemaining} seconds...`}
         </p>
       ) : null}
     </div>

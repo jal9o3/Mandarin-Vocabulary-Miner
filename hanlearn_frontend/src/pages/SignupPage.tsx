@@ -166,7 +166,7 @@ export function SignupPage() {
             {isSubmitting && (
               <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
             )}
-            {isSubmitting ? 'Please wait…' : 'Create Account'}
+            {isSubmitting ? 'Processing…' : 'Create Account'}
           </button>
           <BusyRetryBanner
             active={isSubmittingTimedOut}

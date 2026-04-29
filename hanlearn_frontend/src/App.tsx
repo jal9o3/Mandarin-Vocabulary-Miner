@@ -2,7 +2,6 @@ import { lazy, Suspense, useEffect, useState } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { LandingPage } from './pages/LandingPage'
 import { NavHeader } from './components/NavHeader'
-import { useAuth } from './lib/auth'
 
 const THEME_STORAGE_KEY = 'hanlearn-theme'
 
@@ -31,12 +30,6 @@ function getInitialTheme(): Theme {
 }
 
 function RootEntryPage() {
-  const { isAuthenticated } = useAuth()
-
-  if (isAuthenticated) {
-    return <Navigate to="/paste" replace />
-  }
-
   return <LandingPage />
 }
 
@@ -44,7 +37,7 @@ function RouteLoadingState() {
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-4xl items-center justify-center px-6 py-10 sm:px-10">
       <div className="rounded-full border border-[#d8cab8] bg-[var(--han-panel)] px-5 py-3 text-sm font-semibold text-[#66594f] shadow-sm">
-        Loading page…
+        Processing page…
       </div>
     </main>
   )

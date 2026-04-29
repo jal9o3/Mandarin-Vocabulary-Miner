@@ -4,6 +4,12 @@ A modern, full-stack web application designed to help learners of Mandarin Chine
 
 **Tech Stack**: React + Vite (frontend) | Django REST (backend)
 
+## Project Status
+
+> This project is actively being developed. I am currently focused on improving the deployed version's performance and architecture while working around the limited RAM available on a free backend server plan.
+>
+> If you want a faster and more stable experience right now, please use the local setup instructions below to run the project on your machine.
+
 ## Features
 
 ### Core Learning Tools

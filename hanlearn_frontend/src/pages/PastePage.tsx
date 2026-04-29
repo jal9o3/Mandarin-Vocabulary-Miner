@@ -329,7 +329,7 @@ export function PastePage() {
               {isSubmitting && (
                 <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
               )}
-              {isSubmitting ? 'Loading…' : 'Confirm'}
+              {isSubmitting ? 'Analyzing…' : 'Confirm'}
             </button>
           </div>
           <BusyRetryBanner
@@ -369,7 +369,7 @@ export function PastePage() {
               {isScreening && (
                 <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
               )}
-              {isScreening ? 'Loading…' : 'Analyze'}
+              {isScreening ? 'Processing…' : 'Analyze'}
             </button>
           </div>
           <BusyRetryBanner
