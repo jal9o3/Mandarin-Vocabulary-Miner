@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
+import { useLocation } from 'react-router-dom'
 
 import { BusyRetryBanner } from '../components/LoadingWithRetry'
 import { isAbortError, isBackendConnectionFailure } from './requestUtils'
@@ -9,6 +10,7 @@ import type { AuthContextValue, AuthStatus, RefreshAuthOptions } from './auth'
 const AUTH_TIMEOUT_MS = 5000
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const location = useLocation()
   const [status, setStatus] = useState<AuthStatus>('loading')
   const [username, setUsernameState] = useState<string | null>(null)
   const hasLoadedInitialAuth = useRef(false)
@@ -120,7 +122,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUsername,
   }), [refreshAuth, setAnonymous, setAuthenticated, setUsername, status, username])
 
-  if (status === 'loading' && initAuthTimedOut) {
+  const shouldHideInitTimeoutOverlay = location.pathname === '/'
+
+  if (status === 'loading' && initAuthTimedOut && !shouldHideInitTimeoutOverlay) {
     return (
       <AuthContext.Provider value={value}>
         <div className="flex min-h-screen flex-col items-center justify-center gap-5 bg-[#fffbf4] px-6 text-center">
