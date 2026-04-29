@@ -11,7 +11,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<AuthStatus>('loading')
   const [username, setUsernameState] = useState<string | null>(null)
   const hasLoadedInitialAuth = useRef(false)
-  const [initAuthTimedOut, setInitAuthTimedOut] = useState(false)
   const initAuthControllerRef = useRef<AbortController | null>(null)
   const initAuthTimerRef = useRef<number | null>(null)
 
@@ -64,20 +63,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const abortController = new AbortController()
     initAuthControllerRef.current = abortController
 
-    setInitAuthTimedOut(false)
-    initAuthTimerRef.current = window.setTimeout(() => setInitAuthTimedOut(true), AUTH_TIMEOUT_MS)
+    initAuthTimerRef.current = window.setTimeout(() => {
+      abortController.abort()
+      setAnonymous()
+    }, AUTH_TIMEOUT_MS)
 
     const loadInitialAuth = async () => {
       try {
         const authState = await requestAuthState(abortController.signal)
 
         if (!authState.ok || !authState.isAuthenticated) {
-          setInitAuthTimedOut(false)
           setAnonymous()
           return
         }
 
-        setInitAuthTimedOut(false)
         setAuthenticated(authState.username)
       } catch (error) {
         if (isAbortError(error)) {
@@ -85,7 +84,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
 
         if (isBackendConnectionFailure(error)) {
-          setInitAuthTimedOut(true)
+          setAnonymous()
           return
         }
 
@@ -123,23 +122,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   return (
     <AuthContext.Provider value={value}>
       {children}
-      {status === 'loading' && initAuthTimedOut ? (
-        <div className="pointer-events-none fixed inset-x-0 bottom-4 z-50 flex justify-center px-4">
-          <div className="pointer-events-auto w-full max-w-xl rounded-xl border border-[#e9d4c8] bg-[#fff8f5] px-4 py-3 text-sm text-[#7c5a4e] shadow-lg shadow-[#bf9f83]/20">
-            <p>Request is taking a bit long, please wait.</p>
-            <button
-              type="button"
-              onClick={() => {
-                setInitAuthTimedOut(false)
-                setAnonymous()
-              }}
-              className="mt-3 rounded-xl border border-[#d1451b] px-4 py-2 text-xs font-semibold text-[#d1451b] transition hover:bg-[#fff0ec]"
-            >
-              Continue without signing in
-            </button>
-          </div>
-        </div>
-      ) : null}
     </AuthContext.Provider>
   )
 }
