@@ -11,6 +11,7 @@ export function LoginPage() {
   const { refreshAuth } = useAuth()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
+  const [rememberMe, setRememberMe] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isSubmittingTimedOut, setIsSubmittingTimedOut] = useState(false)
   const [isSubmittingTimeoutExhausted, setIsSubmittingTimeoutExhausted] = useState(false)
@@ -48,7 +49,7 @@ export function LoginPage() {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: trimmedUsername, password }),
+        body: JSON.stringify({ username: trimmedUsername, password, remember_me: rememberMe }),
         signal: submittingControllerRef.current?.signal,
       })
 
@@ -107,6 +108,16 @@ export function LoginPage() {
               onChange={(event) => setPassword(event.target.value)}
               className="mt-1 w-full rounded-xl border border-[#d8ccbd] bg-[#fffdf8] p-3 text-sm text-[#2d241d] outline-none ring-[#d1451b] focus:ring-2"
             />
+          </label>
+
+          <label className="flex items-center gap-2 text-sm font-semibold text-[#4e4138]">
+            <input
+              type="checkbox"
+              checked={rememberMe}
+              onChange={(event) => setRememberMe(event.target.checked)}
+              className="h-4 w-4 rounded border border-[#bfa891] text-[#d1451b] focus:ring-[#d1451b]/50"
+            />
+            Remember Me
           </label>
 
           {errorMessage ? <p className="text-sm font-semibold text-[#b42020]">{errorMessage}</p> : null}

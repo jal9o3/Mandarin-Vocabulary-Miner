@@ -10,8 +10,6 @@ const AUTH_TIMEOUT_MS = 5000
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<AuthStatus>('loading')
   const [username, setUsernameState] = useState<string | null>(null)
-  const hasLoadedInitialAuth = useRef(false)
-  const initAuthControllerRef = useRef<AbortController | null>(null)
   const initAuthTimerRef = useRef<number | null>(null)
 
   const setAuthenticated = useCallback((nextUsername?: string | null) => {
@@ -55,13 +53,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [setAnonymous, setAuthenticated])
 
   useEffect(() => {
-    if (hasLoadedInitialAuth.current) {
-      return
-    }
-
-    hasLoadedInitialAuth.current = true
     const abortController = new AbortController()
-    initAuthControllerRef.current = abortController
 
     initAuthTimerRef.current = window.setTimeout(() => {
       abortController.abort()

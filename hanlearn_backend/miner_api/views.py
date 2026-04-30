@@ -22,6 +22,7 @@ MAXIMUM_EASE_FACTOR = 3.0
 MAX_INTERVAL_DAYS = 36500
 MAX_ANALYZE_TEXT_CHARS = 60_000
 MAX_ANALYZE_UPLOAD_BYTES = 5 * 1024 * 1024
+REMEMBER_ME_SESSION_AGE_SECONDS = max(1, int(getattr(settings, "REMEMBER_ME_SESSION_DAYS", 30))) * 24 * 60 * 60
 
 
 def _clamp_ease_factor(value: float) -> float:
@@ -144,6 +145,15 @@ def _string_field(payload: dict, key: str) -> str | None:
     return None
 
 
+def _optional_bool_field(payload: dict, key: str) -> tuple[bool | None, bool]:
+    value = payload.get(key)
+    if value is None:
+        return None, True
+    if isinstance(value, bool):
+        return value, True
+    return None, False
+
+
 def _coerce_flashcard_ids(raw_ids: object) -> list[int] | None:
     if not isinstance(raw_ids, list):
         return None
@@ -193,15 +203,22 @@ def register_view(request: HttpRequest) -> JsonResponse:
     payload = _json_body(request)
     username = _string_field(payload, "username")
     password = _string_field(payload, "password")
+    remember_me, is_valid_bool = _optional_bool_field(payload, "remember_me")
 
     if username is None or password is None:
         return JsonResponse({"error": "Provide non-empty 'username' and 'password'."}, status=400)
+    if not is_valid_bool:
+        return JsonResponse({"error": "Field 'remember_me' must be a boolean when provided."}, status=400)
 
     if User.objects.filter(username=username).exists():
         return JsonResponse({"error": "Username is already taken."}, status=400)
 
     user = User.objects.create_user(username=username, password=password)
     login(request, user)
+    if remember_me:
+        request.session.set_expiry(REMEMBER_ME_SESSION_AGE_SECONDS)
+    else:
+        request.session.set_expiry(0)
     return JsonResponse({"username": user.username, "is_authenticated": True}, status=201)
 
 
@@ -211,15 +228,22 @@ def login_view(request: HttpRequest) -> JsonResponse:
     payload = _json_body(request)
     username = _string_field(payload, "username")
     password = _string_field(payload, "password")
+    remember_me, is_valid_bool = _optional_bool_field(payload, "remember_me")
 
     if username is None or password is None:
         return JsonResponse({"error": "Provide non-empty 'username' and 'password'."}, status=400)
+    if not is_valid_bool:
+        return JsonResponse({"error": "Field 'remember_me' must be a boolean when provided."}, status=400)
 
     user = authenticate(request, username=username, password=password)
     if user is None:
         return JsonResponse({"error": "Invalid username or password."}, status=401)
 
     login(request, user)
+    if remember_me:
+        request.session.set_expiry(REMEMBER_ME_SESSION_AGE_SECONDS)
+    else:
+        request.session.set_expiry(0)
     return JsonResponse({"username": user.username, "is_authenticated": True})
 
 

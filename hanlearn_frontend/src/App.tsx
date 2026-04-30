@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useState } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { LandingPage } from './pages/LandingPage'
 import { NavHeader } from './components/NavHeader'
+import { useAuth } from './lib/auth'
 
 const THEME_STORAGE_KEY = 'hanlearn-theme'
 
@@ -30,6 +31,16 @@ function getInitialTheme(): Theme {
 }
 
 function RootEntryPage() {
+  const { status, isAuthenticated } = useAuth()
+
+  if (status === 'loading') {
+    return <RouteLoadingState />
+  }
+
+  if (isAuthenticated) {
+    return <Navigate to="/paste" replace />
+  }
+
   return <LandingPage />
 }
 
@@ -60,7 +71,7 @@ function App() {
       <Suspense fallback={<RouteLoadingState />}>
         <Routes>
           <Route path="/" element={<RootEntryPage />} />
-          <Route path="/landing" element={<LandingPage />} />
+          <Route path="/landing" element={<RootEntryPage />} />
           <Route path="/upload" element={<Navigate to="/paste" replace />} />
           <Route path="/library" element={<LibraryPage />} />
           <Route path="/paste" element={<PastePage />} />

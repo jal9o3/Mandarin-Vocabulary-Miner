@@ -255,6 +255,31 @@ class MinerApiTests(TestCase):
         self.assertEqual(me_response.json()["is_authenticated"], True)
         self.assertEqual(me_response.json()["username"], "alice")
 
+    def test_login_sets_browser_session_when_remember_me_disabled(self):
+        User.objects.create_user(username="alice", password="StrongPass123")
+
+        response = self.client.post(
+            "/api/auth/login",
+            data=json.dumps({"username": "alice", "password": "StrongPass123", "remember_me": False}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(self.client.session.get_expire_at_browser_close())
+
+    def test_login_sets_persistent_session_when_remember_me_enabled(self):
+        User.objects.create_user(username="alice", password="StrongPass123")
+
+        response = self.client.post(
+            "/api/auth/login",
+            data=json.dumps({"username": "alice", "password": "StrongPass123", "remember_me": True}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(self.client.session.get_expire_at_browser_close())
+        self.assertGreaterEqual(self.client.session.get_expiry_age(), 20 * 24 * 60 * 60)
+
     def test_update_username_requires_authentication(self):
         response = self.client.post(
             "/api/auth/username",

@@ -15,6 +15,47 @@ type SavedText = {
   created_at: string
 }
 
+type SentenceSegment = {
+  text: string
+}
+
+const SENTENCE_END_PUNCTUATION = /[。！？!?；;:]/
+
+function splitContentIntoSentences(content: string): SentenceSegment[] {
+  const normalized = content.replaceAll('\r\n', '\n')
+  const segments: SentenceSegment[] = []
+  let buffer = ''
+
+  for (const char of Array.from(normalized)) {
+    if (char === '\n') {
+      const trimmed = buffer.trim()
+      if (trimmed) {
+        segments.push({ text: trimmed })
+      }
+      buffer = ''
+      continue
+    }
+
+    buffer += char
+    if (!SENTENCE_END_PUNCTUATION.test(char)) {
+      continue
+    }
+
+    const trimmed = buffer.trim()
+    if (trimmed) {
+      segments.push({ text: trimmed })
+    }
+    buffer = ''
+  }
+
+  const remaining = buffer.trim()
+  if (remaining) {
+    segments.push({ text: remaining })
+  }
+
+  return segments
+}
+
 function DotsVerticalIcon() {
   return (
     <svg
@@ -27,6 +68,26 @@ function DotsVerticalIcon() {
       <circle cx="12" cy="5" r="1.5" />
       <circle cx="12" cy="12" r="1.5" />
       <circle cx="12" cy="19" r="1.5" />
+    </svg>
+  )
+}
+
+function SpeakerIcon() {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="h-4 w-4"
+      aria-hidden="true"
+    >
+      <path d="M11 5L6 9H3v6h3l5 4V5z" />
+      <path d="M15.5 8.5a5 5 0 010 7" />
+      <path d="M18.5 6a8.5 8.5 0 010 12" />
     </svg>
   )
 }
@@ -44,6 +105,7 @@ function TextCard({
 }) {
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
+  const cardLabel = text.title || text.content.slice(0, 40)
 
   useEffect(() => {
     if (!menuOpen) return
@@ -57,29 +119,27 @@ function TextCard({
   }, [menuOpen])
 
   return (
-    <div className="w-28 shrink-0 sm:w-32">
+    <div className="group w-28 shrink-0 sm:w-32">
       <div className="relative">
-        {/* Book spine card */}
         <button
           type="button"
           onClick={onOpen}
-          className="group flex w-full flex-col items-center"
-          aria-label={`Open: ${text.title || text.content.slice(0, 40)}`}
+          className="flex w-full"
+          aria-label={`Open: ${cardLabel}`}
         >
-          <div className="flex h-32 w-full flex-col justify-end rounded-lg border border-[#d8cab8] bg-gradient-to-b from-[#fff9f0] via-[#f6e7d5] to-[#efd8bf] p-2 shadow-sm transition group-hover:-translate-y-0.5 group-hover:shadow-md sm:h-36">
-            <p className="line-clamp-4 text-[10px] leading-snug text-[#7a6355]">
-              {text.content}
+          <div className="flex h-32 w-full items-center justify-center rounded-lg border border-[#d8cab8] bg-gradient-to-b from-[#fff9f0] via-[#f6e7d5] to-[#efd8bf] px-2 py-3 text-center shadow-sm transition group-hover:-translate-y-0.5 group-hover:shadow-md sm:h-36">
+            <p className="line-clamp-4 text-xs font-semibold leading-snug text-[#4a3e35]">
+              {cardLabel}
             </p>
           </div>
         </button>
 
-        {/* Three-dot menu button */}
         <div ref={menuRef} className="absolute right-1 top-1">
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); setMenuOpen((v) => !v) }}
             aria-label="Options"
-            className="flex h-6 w-6 items-center justify-center rounded-md bg-white/70 text-[#5e5349] opacity-0 transition hover:bg-white hover:text-[#1b1714] group-scope-hover:opacity-100 [.w-28:hover_&]:opacity-100 [.w-32:hover_&]:opacity-100"
+            className="flex h-6 w-6 items-center justify-center rounded-md bg-white/70 text-[#5e5349] opacity-0 transition hover:bg-white hover:text-[#1b1714] group-hover:opacity-100"
             style={{ opacity: menuOpen ? 1 : undefined }}
           >
             <DotsVerticalIcon />
@@ -105,10 +165,6 @@ function TextCard({
           ) : null}
         </div>
       </div>
-
-      <p className="mt-2 line-clamp-2 text-center text-xs font-semibold leading-tight text-[#4a3e35]">
-        {text.title || text.content.slice(0, 40)}
-      </p>
     </div>
   )
 }
@@ -122,6 +178,9 @@ export function LibraryPage() {
 
   // Reading modal state
   const [readingText, setReadingText] = useState<SavedText | null>(null)
+  const [isSpeaking, setIsSpeaking] = useState(false)
+  const [activeSentenceIndex, setActiveSentenceIndex] = useState<number | null>(null)
+  const playbackSessionIdRef = useRef(0)
 
   // Edit modal state
   const [editingText, setEditingText] = useState<SavedText | null>(null)
@@ -139,6 +198,97 @@ export function LibraryPage() {
   const [isDeleteTimedOut, setIsDeleteTimedOut] = useState(false)
   const [isDeleteTimeoutExhausted, setIsDeleteTimeoutExhausted] = useState(false)
   const deleteControllerRef = useRef<AbortController | null>(null)
+
+  const isSpeechSupported = typeof window !== 'undefined' && 'speechSynthesis' in window && 'SpeechSynthesisUtterance' in window
+
+  const sentenceSegments = useMemo(() => {
+    if (!readingText) {
+      return []
+    }
+    return splitContentIntoSentences(readingText.content)
+  }, [readingText])
+
+  const stopSpeaking = useCallback(() => {
+    playbackSessionIdRef.current += 1
+
+    if (!isSpeechSupported) {
+      setIsSpeaking(false)
+      setActiveSentenceIndex(null)
+      return
+    }
+
+    window.speechSynthesis.cancel()
+    setIsSpeaking(false)
+    setActiveSentenceIndex(null)
+  }, [isSpeechSupported])
+
+  const startSpeakingFromSentence = useCallback((startIndex: number) => {
+    if (!readingText || !isSpeechSupported || sentenceSegments.length === 0) {
+      return
+    }
+
+    if (startIndex < 0 || startIndex >= sentenceSegments.length) {
+      return
+    }
+
+    window.speechSynthesis.cancel()
+    playbackSessionIdRef.current += 1
+    const playbackSessionId = playbackSessionIdRef.current
+    setIsSpeaking(true)
+
+    const speakSentence = (sentenceIndex: number) => {
+      if (playbackSessionId !== playbackSessionIdRef.current) {
+        return
+      }
+
+      if (sentenceIndex >= sentenceSegments.length) {
+        setIsSpeaking(false)
+        setActiveSentenceIndex(null)
+        return
+      }
+
+      const sentence = sentenceSegments[sentenceIndex]
+      setActiveSentenceIndex(sentenceIndex)
+
+      const utterance = new SpeechSynthesisUtterance(sentence.text)
+      utterance.lang = 'zh-CN'
+
+      utterance.onerror = () => {
+        if (playbackSessionId !== playbackSessionIdRef.current) {
+          return
+        }
+        setIsSpeaking(false)
+        setActiveSentenceIndex(null)
+      }
+
+      utterance.onend = () => {
+        if (playbackSessionId !== playbackSessionIdRef.current) {
+          return
+        }
+        speakSentence(sentenceIndex + 1)
+      }
+
+      window.speechSynthesis.speak(utterance)
+    }
+
+    speakSentence(startIndex)
+  }, [isSpeechSupported, readingText, sentenceSegments])
+
+  const handleSpeakReadingText = useCallback(() => {
+    startSpeakingFromSentence(0)
+  }, [startSpeakingFromSentence])
+
+  useEffect(() => {
+    return () => {
+      if (isSpeechSupported) {
+        window.speechSynthesis.cancel()
+      }
+    }
+  }, [isSpeechSupported])
+
+  useEffect(() => {
+    stopSpeaking()
+  }, [readingText?.id, stopSpeaking])
 
   const loadLibrary = useCallback(async () => {
     if (!isAuthenticated) {
@@ -335,7 +485,10 @@ export function LibraryPage() {
             <button
               type="button"
               aria-label="Close"
-              onClick={() => setReadingText(null)}
+              onClick={() => {
+                stopSpeaking()
+                setReadingText(null)
+              }}
               className="absolute right-4 top-4 rounded-md px-2 py-1 text-sm font-bold text-[#5b4f46] transition hover:bg-[#faf6f0]"
             >
               ✕
@@ -343,18 +496,60 @@ export function LibraryPage() {
 
             {/* Header */}
             <div className="border-b border-[#ede3d6] px-6 pt-5 pb-4 pr-12">
-              <span className="mono text-[10px] uppercase tracking-[0.18em] text-[#8d7c6f]">HSK {readingText.hsk_level}</span>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <span className="mono text-[10px] uppercase tracking-[0.18em] text-[#8d7c6f]">HSK {readingText.hsk_level}</span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (isSpeaking) {
+                        stopSpeaking()
+                        return
+                      }
+                      handleSpeakReadingText()
+                    }}
+                    disabled={!isSpeechSupported || sentenceSegments.length === 0}
+                    className="inline-flex items-center gap-1 rounded-md border border-[#d8ccbd] bg-white px-2 py-1 text-xs font-semibold text-[#3e342d] transition hover:bg-[#faf6f0] disabled:opacity-60"
+                    aria-label={isSpeaking ? 'Stop reading aloud' : 'Read aloud'}
+                  >
+                    <SpeakerIcon />
+                    {isSpeaking ? 'Stop' : 'Speak'}
+                  </button>
+                </div>
+              </div>
               <h2 className="mt-0.5 text-xl font-extrabold text-[#1b1714]">
                 {readingText.title || readingText.content.slice(0, 60)}
               </h2>
               <p className="mt-0.5 text-xs text-[#a09080]">{new Date(readingText.created_at).toLocaleDateString()}</p>
+              <p className="mt-2 text-xs font-semibold text-[#8f7f6f]">
+                Click any sentence to read from there.
+              </p>
+              {!isSpeechSupported ? (
+                <p className="mt-2 text-xs font-semibold text-[#8f7f6f]">
+                  Speech playback is not available in this browser.
+                </p>
+              ) : null}
             </div>
 
             {/* Scrollable body */}
             <div className="overflow-y-auto px-6 py-5">
-              <p className="whitespace-pre-wrap text-base leading-loose text-[#2f261f]">
-                {readingText.content}
-              </p>
+              <div className="space-y-2 text-base leading-loose text-[#2f261f]">
+                {sentenceSegments.map((sentence, index) => (
+                  <button
+                    key={`${index}-${sentence.text.slice(0, 24)}`}
+                    type="button"
+                    onClick={() => startSpeakingFromSentence(index)}
+                    disabled={!isSpeechSupported}
+                    className={`block w-full rounded-md px-2 py-1 text-left transition ${
+                      index === activeSentenceIndex
+                        ? 'bg-[#ffe29f] text-[#1b1714]'
+                        : 'hover:bg-[#faf6f0]'
+                    } disabled:cursor-default disabled:hover:bg-transparent`}
+                  >
+                    {sentence.text}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         </div>
