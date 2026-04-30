@@ -11,7 +11,7 @@ from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_http_methods
 
-from .models import SavedText, UserFlashcard, Word
+from .models import FlashcardReviewSubmission, SavedText, UserFlashcard, Word
 from .services import analyze_text, build_vocab_screen, compute_text_hsk_level, load_vocab, parse_vocab_text, resolve_word_flashcard_info, save_vocab
 
 
@@ -52,10 +52,10 @@ def _serialize_flashcard(flashcard: UserFlashcard) -> dict:
         "id": flashcard.id,
         "word": flashcard.word.text,
         "pinyin": flashcard.word.pinyin,
-        "created_at": flashcard.created_at,
+        "created_at": flashcard.created_at.isoformat(),
         "meaning": flashcard.meaning,
-        "due_at": flashcard.due_at,
-        "last_reviewed_at": flashcard.last_reviewed_at,
+        "due_at": flashcard.due_at.isoformat(),
+        "last_reviewed_at": flashcard.last_reviewed_at.isoformat() if flashcard.last_reviewed_at else None,
         "interval_days": flashcard.interval_days,
         "ease_factor": flashcard.ease_factor,
         "consecutive_correct_reviews": flashcard.consecutive_correct_reviews,
@@ -127,6 +127,23 @@ def _string_field(payload: dict, key: str) -> str | None:
         if normalized:
             return normalized
     return None
+
+
+def _coerce_flashcard_ids(raw_ids: object) -> list[int] | None:
+    if not isinstance(raw_ids, list):
+        return None
+
+    cleaned: list[int] = []
+    seen: set[int] = set()
+    for value in raw_ids:
+        if not isinstance(value, int):
+            return None
+        if value <= 0 or value in seen:
+            continue
+        seen.add(value)
+        cleaned.append(value)
+
+    return cleaned
 
 
 def _validate_text_length(text: str, *, field_name: str = "text") -> JsonResponse | None:
@@ -630,26 +647,102 @@ def review_flashcard_view(request: HttpRequest, flashcard_id: int) -> JsonRespon
     if rating not in {"again", "hard", "good", "easy"}:
         return JsonResponse({"error": "Provide 'rating' as one of: again, hard, good, easy."}, status=400)
 
-    try:
-        flashcard = UserFlashcard.objects.select_related("word").get(id=flashcard_id, user=request.user)
-    except UserFlashcard.DoesNotExist:
-        return JsonResponse({"error": "Flashcard not found."}, status=404)
+    idempotency_key = payload.get("idempotency_key")
+    if idempotency_key is not None:
+        if not isinstance(idempotency_key, str):
+            return JsonResponse({"error": "Provide 'idempotency_key' as a string."}, status=400)
+        idempotency_key = idempotency_key.strip()
+        if not idempotency_key:
+            return JsonResponse({"error": "Field 'idempotency_key' cannot be empty."}, status=400)
+        if len(idempotency_key) > 128:
+            return JsonResponse({"error": "Field 'idempotency_key' is too long."}, status=400)
 
-    _apply_sm2_review(flashcard, rating)
-    flashcard.save(
-        update_fields=[
-            "due_at",
-            "last_reviewed_at",
-            "interval_days",
-            "ease_factor",
-            "consecutive_correct_reviews",
-            "review_count",
-            "lapse_count",
-        ]
+    with transaction.atomic():
+        try:
+            flashcard = (
+                UserFlashcard.objects.select_for_update()
+                .select_related("word")
+                .get(id=flashcard_id, user=request.user)
+            )
+        except UserFlashcard.DoesNotExist:
+            return JsonResponse({"error": "Flashcard not found."}, status=404)
+
+        if idempotency_key:
+            submission, created = FlashcardReviewSubmission.objects.select_for_update().get_or_create(
+                user=request.user,
+                idempotency_key=idempotency_key,
+                defaults={
+                    "flashcard": flashcard,
+                    "rating": rating,
+                    "response_payload": {},
+                },
+            )
+
+            if not created:
+                if submission.flashcard_id != flashcard.id:
+                    return JsonResponse({"error": "Idempotency key already used for another flashcard."}, status=409)
+                if submission.rating != rating:
+                    return JsonResponse({"error": "Idempotency key already used with another rating."}, status=409)
+                if submission.response_payload:
+                    replay_payload = dict(submission.response_payload)
+                    replay_payload["idempotency_replayed"] = True
+                    return JsonResponse(replay_payload)
+
+        _apply_sm2_review(flashcard, rating)
+        flashcard.save(
+            update_fields=[
+                "due_at",
+                "last_reviewed_at",
+                "interval_days",
+                "ease_factor",
+                "consecutive_correct_reviews",
+                "review_count",
+                "lapse_count",
+            ]
+        )
+
+        due_remaining = UserFlashcard.objects.filter(user=request.user, due_at__lte=timezone.now()).count()
+        response_payload = {
+            "flashcard": _serialize_flashcard(flashcard),
+            "due_remaining": due_remaining,
+            "idempotency_replayed": False,
+        }
+
+        if idempotency_key:
+            submission.response_payload = response_payload
+            submission.save(update_fields=["response_payload"])
+
+    return JsonResponse(response_payload)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def bulk_delete_flashcards_view(request: HttpRequest) -> JsonResponse:
+    if not request.user.is_authenticated:
+        return JsonResponse({"error": "Sign in to manage flashcards."}, status=401)
+
+    payload = _json_body(request)
+    ids = _coerce_flashcard_ids(payload.get("ids"))
+    if ids is None:
+        return JsonResponse({"error": "Provide 'ids' as a list of numeric flashcard ids."}, status=400)
+
+    if not ids:
+        return JsonResponse({"deleted": 0, "deleted_ids": [], "missing_ids": []})
+
+    owned_queryset = UserFlashcard.objects.filter(user=request.user, id__in=ids)
+    deleted_ids = list(owned_queryset.values_list("id", flat=True))
+    deleted_count, _ = owned_queryset.delete()
+
+    deleted_set = set(deleted_ids)
+    missing_ids = [flashcard_id for flashcard_id in ids if flashcard_id not in deleted_set]
+
+    return JsonResponse(
+        {
+            "deleted": deleted_count,
+            "deleted_ids": deleted_ids,
+            "missing_ids": missing_ids,
+        }
     )
-
-    due_remaining = UserFlashcard.objects.filter(user=request.user, due_at__lte=timezone.now()).count()
-    return JsonResponse({"flashcard": _serialize_flashcard(flashcard), "due_remaining": due_remaining})
 
 
 @require_GET

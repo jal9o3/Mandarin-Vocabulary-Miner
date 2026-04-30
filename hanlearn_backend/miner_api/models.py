@@ -44,4 +44,21 @@ class SavedText(models.Model):
         ordering = ["-created_at"]
 
     def __str__(self) -> str:
-        return self.title or f"Text {self.id}"
+        return str(self.title) if self.title else "Text"
+
+
+class FlashcardReviewSubmission(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="flashcard_review_submissions")
+    flashcard = models.ForeignKey(UserFlashcard, on_delete=models.CASCADE, related_name="review_submissions")
+    idempotency_key = models.CharField(max_length=128)
+    rating = models.CharField(max_length=8)
+    response_payload = models.JSONField(default=dict)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["user", "idempotency_key"], name="unique_user_review_idempotency_key"),
+        ]
+
+    def __str__(self) -> str:
+        return f"review:{self.idempotency_key}"

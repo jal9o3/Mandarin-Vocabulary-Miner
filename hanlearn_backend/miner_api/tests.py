@@ -12,7 +12,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from miner_api import services
-from miner_api.models import UserFlashcard, Word
+from miner_api.models import FlashcardReviewSubmission, UserFlashcard, Word
 
 
 class MinerApiTests(TestCase):
@@ -554,6 +554,124 @@ class MinerApiTests(TestCase):
         self.assertEqual(flashcard.lapse_count, 0)
         self.assertAlmostEqual(flashcard.ease_factor, 2.5)
         self.assertGreaterEqual(flashcard.due_at, before_review + timedelta(hours=23))
+
+    def test_review_flashcard_idempotency_key_prevents_double_sm2_mutation(self):
+        user = User.objects.create_user(username="idempotent", password="TopSecret123")
+        self.client.force_login(user)
+
+        word = Word.objects.create(text="阅读", pinyin="yue4 du2")
+        flashcard = UserFlashcard.objects.create(
+            user=user,
+            word=word,
+            meaning="to read",
+            due_at=timezone.now() - timedelta(minutes=1),
+        )
+
+        first_response = self.client.post(
+            f"/api/flashcards/{flashcard.id}/review",
+            data=json.dumps({"rating": "good", "idempotency_key": "k-review-1"}),
+            content_type="application/json",
+        )
+        second_response = self.client.post(
+            f"/api/flashcards/{flashcard.id}/review",
+            data=json.dumps({"rating": "good", "idempotency_key": "k-review-1"}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(first_response.status_code, 200)
+        self.assertEqual(second_response.status_code, 200)
+        self.assertFalse(first_response.json()["idempotency_replayed"])
+        self.assertTrue(second_response.json()["idempotency_replayed"])
+
+        flashcard.refresh_from_db()
+        self.assertEqual(flashcard.review_count, 1)
+        self.assertEqual(flashcard.consecutive_correct_reviews, 1)
+        self.assertEqual(
+            FlashcardReviewSubmission.objects.filter(user=user, idempotency_key="k-review-1").count(),
+            1,
+        )
+        submission = FlashcardReviewSubmission.objects.get(user=user, idempotency_key="k-review-1")
+        flashcard_payload = submission.response_payload["flashcard"]
+        self.assertIsInstance(flashcard_payload["created_at"], str)
+        self.assertIsInstance(flashcard_payload["due_at"], str)
+
+    def test_review_flashcard_idempotency_key_rejects_rating_mismatch(self):
+        user = User.objects.create_user(username="idempotent2", password="TopSecret123")
+        self.client.force_login(user)
+
+        word = Word.objects.create(text="复习", pinyin="fu4 xi2")
+        flashcard = UserFlashcard.objects.create(
+            user=user,
+            word=word,
+            meaning="review",
+            due_at=timezone.now() - timedelta(minutes=1),
+        )
+
+        first_response = self.client.post(
+            f"/api/flashcards/{flashcard.id}/review",
+            data=json.dumps({"rating": "good", "idempotency_key": "k-review-2"}),
+            content_type="application/json",
+        )
+        second_response = self.client.post(
+            f"/api/flashcards/{flashcard.id}/review",
+            data=json.dumps({"rating": "easy", "idempotency_key": "k-review-2"}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(first_response.status_code, 200)
+        self.assertEqual(second_response.status_code, 409)
+
+        flashcard.refresh_from_db()
+        self.assertEqual(flashcard.review_count, 1)
+
+    def test_bulk_delete_flashcards_deletes_only_owned_ids(self):
+        user = User.objects.create_user(username="bulkdeleter", password="TopSecret123")
+        other_user = User.objects.create_user(username="bulkother", password="TopSecret123")
+        self.client.force_login(user)
+
+        card_one = UserFlashcard.objects.create(
+            user=user,
+            word=Word.objects.create(text="一个", pinyin="yi1 ge4"),
+            meaning="one",
+        )
+        card_two = UserFlashcard.objects.create(
+            user=user,
+            word=Word.objects.create(text="两个", pinyin="liang3 ge4"),
+            meaning="two",
+        )
+        other_card = UserFlashcard.objects.create(
+            user=other_user,
+            word=Word.objects.create(text="三个", pinyin="san1 ge4"),
+            meaning="three",
+        )
+
+        response = self.client.post(
+            "/api/flashcards/bulk-delete",
+            data=json.dumps({"ids": [card_one.id, other_card.id, 999999, card_two.id]}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["deleted"], 2)
+        self.assertEqual(set(payload["deleted_ids"]), {card_one.id, card_two.id})
+        self.assertEqual(set(payload["missing_ids"]), {other_card.id, 999999})
+        self.assertFalse(UserFlashcard.objects.filter(id=card_one.id).exists())
+        self.assertFalse(UserFlashcard.objects.filter(id=card_two.id).exists())
+        self.assertTrue(UserFlashcard.objects.filter(id=other_card.id).exists())
+
+    def test_bulk_delete_flashcards_rejects_invalid_ids(self):
+        user = User.objects.create_user(username="bulkinvalid", password="TopSecret123")
+        self.client.force_login(user)
+
+        response = self.client.post(
+            "/api/flashcards/bulk-delete",
+            data=json.dumps({"ids": ["bad-id"]}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("error", response.json())
 
     def test_update_flashcard_updates_word_pinyin_and_meaning(self):
         user = User.objects.create_user(username="harry", password="TopSecret123")

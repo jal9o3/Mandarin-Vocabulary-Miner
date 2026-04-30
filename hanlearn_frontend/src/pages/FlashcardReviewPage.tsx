@@ -1,8 +1,15 @@
-import { type FormEvent, useCallback, useEffect, useRef, useState } from 'react'
+import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Download } from 'lucide-react'
 import { API_BASE_URL } from '../lib/apiBase'
+import { useAuth } from '../lib/auth'
 import { BusyRetryBanner, LoadingCard } from '../components/LoadingWithRetry'
 import { attachTimeout, isAbortError, isBackendConnectionFailure } from '../lib/requestUtils'
+import {
+  enqueueReviewUpload,
+  loadReviewUploadQueue,
+  removeReviewUpload,
+  replaceReviewUpload,
+} from '../lib/reviewUploadQueue'
 
 const buildApiUrl = (path: string, searchParams?: URLSearchParams) => {
   const base = API_BASE_URL.replace(/\/$/, '')
@@ -27,6 +34,26 @@ const parseApiJson = async <T,>(response: Response): Promise<T> => {
 }
 
 type Rating = 'again' | 'hard' | 'good' | 'easy'
+
+type ReviewResponsePayload = {
+  error?: unknown
+}
+
+type BulkDeleteResponse = {
+  error?: unknown
+  deleted?: unknown
+  deleted_ids?: unknown
+  missing_ids?: unknown
+}
+
+const RETRY_BASE_MS = 1200
+const RETRY_CAP_MS = 60000
+
+const nextRetryDelayMs = (attempts: number) => {
+  const baseDelay = Math.min(RETRY_CAP_MS, RETRY_BASE_MS * 2 ** Math.max(0, attempts - 1))
+  const jitter = Math.floor(Math.random() * 500)
+  return baseDelay + jitter
+}
 
 type FlashcardData = {
   id: number
@@ -156,16 +183,15 @@ function TrashIcon() {
 }
 
 export function FlashcardReviewPage() {
+  const { username } = useAuth()
   const [cards, setCards] = useState<FlashcardData[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isLoadingTimedOut, setIsLoadingTimedOut] = useState(false)
   const loadingControllerRef = useRef<AbortController | null>(null)
-  const [isSubmittingReview, setIsSubmittingReview] = useState(false)
-  const [isReviewTimedOut, setIsReviewTimedOut] = useState(false)
-  const [isReviewTimeoutExhausted, setIsReviewTimeoutExhausted] = useState(false)
-  const reviewControllerRef = useRef<AbortController | null>(null)
-  const [pendingRating, setPendingRating] = useState<Rating | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [syncErrorMessage, setSyncErrorMessage] = useState<string | null>(null)
+  const [pendingUploadCount, setPendingUploadCount] = useState(0)
+  const [isSyncingReviews, setIsSyncingReviews] = useState(false)
   const [isFlipped, setIsFlipped] = useState(false)
   const [isComplete, setIsComplete] = useState(false)
   const [initialDueCount, setInitialDueCount] = useState(0)
@@ -185,14 +211,28 @@ export function FlashcardReviewPage() {
   const [isEditTimeoutExhausted, setIsEditTimeoutExhausted] = useState(false)
   const editControllerRef = useRef<AbortController | null>(null)
   const [deletingCardId, setDeletingCardId] = useState<number | null>(null)
+  const [selectedCardIds, setSelectedCardIds] = useState<Set<number>>(new Set())
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false)
   const [isExportingCsv, setIsExportingCsv] = useState(false)
   const [isExportTimedOut, setIsExportTimedOut] = useState(false)
   const [isExportTimeoutExhausted, setIsExportTimeoutExhausted] = useState(false)
+  const reviewSyncTimerRef = useRef<number | null>(null)
+  const processReviewQueueRef = useRef<() => Promise<void>>(async () => {})
+  const isProcessingQueueRef = useRef(false)
+  const hasQueuedFollowupRef = useRef(false)
+  const lastQueuedCardIdRef = useRef<number | null>(null)
+  const selectAllVisibleRef = useRef<HTMLInputElement | null>(null)
 
   const hasCards = cards.length > 0
   const currentCard = hasCards ? cards[0] : null
   const remainingCards = cards.length
   const reviewedCards = Math.max(0, initialDueCount - remainingCards)
+  const visibleCardIds = useMemo(() => allCards.map((card) => card.id), [allCards])
+  const selectedVisibleCount = useMemo(
+    () => visibleCardIds.filter((id) => selectedCardIds.has(id)).length,
+    [selectedCardIds, visibleCardIds],
+  )
+  const allVisibleSelected = visibleCardIds.length > 0 && selectedVisibleCount === visibleCardIds.length
 
   const loadFlashcards = useCallback(async (showCompletionOnEmpty = false) => {
     const clearTimer = attachTimeout(setIsLoadingTimedOut, loadingControllerRef)
@@ -275,6 +315,157 @@ export function FlashcardReviewPage() {
     void loadFlashcards()
   }, [loadFlashcards])
 
+  const refreshPendingUploadCount = useCallback(() => {
+    if (!username) {
+      setPendingUploadCount(0)
+      setSyncErrorMessage(null)
+      return
+    }
+
+    const pending = loadReviewUploadQueue().filter((job) => job.username === username).length
+    setPendingUploadCount(pending)
+    if (pending === 0) {
+      setSyncErrorMessage(null)
+    }
+  }, [username])
+
+  const scheduleReviewQueueRun = useCallback((delayMs = 0) => {
+    if (reviewSyncTimerRef.current != null) {
+      window.clearTimeout(reviewSyncTimerRef.current)
+    }
+    reviewSyncTimerRef.current = window.setTimeout(() => {
+      void processReviewQueueRef.current()
+    }, Math.max(0, delayMs))
+  }, [])
+
+  const processReviewQueue = useCallback(async () => {
+    if (!username) {
+      setIsSyncingReviews(false)
+      setSyncErrorMessage(null)
+      return
+    }
+
+    if (isProcessingQueueRef.current) {
+      hasQueuedFollowupRef.current = true
+      return
+    }
+
+    isProcessingQueueRef.current = true
+    setIsSyncingReviews(true)
+    try {
+      while (true) {
+        const now = Date.now()
+        const queue = loadReviewUploadQueue().filter((job) => job.username === username)
+        if (!queue.length) {
+          setSyncErrorMessage(null)
+          break
+        }
+
+        const nextDueJob = queue
+          .sort((a, b) => a.nextAttemptAt - b.nextAttemptAt || a.createdAt - b.createdAt)
+          .find((job) => job.nextAttemptAt <= now)
+
+        if (!nextDueJob) {
+          const earliest = queue[0]
+          scheduleReviewQueueRun(Math.max(250, earliest.nextAttemptAt - now))
+          break
+        }
+
+        try {
+          const response = await fetch(buildApiUrl(`/api/flashcards/${nextDueJob.cardId}/review`), {
+            method: 'POST',
+            credentials: 'include',
+            headers: {
+              'Content-Type': 'application/json',
+              Accept: 'application/json',
+            },
+            body: JSON.stringify({
+              rating: nextDueJob.rating,
+              idempotency_key: nextDueJob.idempotencyKey,
+            }),
+          })
+
+          const payload = await parseApiJson<ReviewResponsePayload>(response)
+          if (response.ok) {
+            removeReviewUpload(nextDueJob.id)
+            setSyncErrorMessage(null)
+            refreshPendingUploadCount()
+            continue
+          }
+
+          if (response.status >= 500 || response.status === 429) {
+            const nextAttempts = nextDueJob.attempts + 1
+            replaceReviewUpload({
+              ...nextDueJob,
+              attempts: nextAttempts,
+              nextAttemptAt: Date.now() + nextRetryDelayMs(nextAttempts),
+              lastError: typeof payload.error === 'string' ? payload.error : `Server error ${response.status}`,
+            })
+            setSyncErrorMessage('Some review updates are retrying due to backend instability.')
+            refreshPendingUploadCount()
+            scheduleReviewQueueRun(nextRetryDelayMs(nextAttempts))
+            break
+          }
+
+          if (response.status === 401) {
+            setSyncErrorMessage('Review sync paused until you sign in again.')
+            scheduleReviewQueueRun(5000)
+            break
+          }
+
+          removeReviewUpload(nextDueJob.id)
+          setSyncErrorMessage(
+            typeof payload.error === 'string'
+              ? `Dropped one review update: ${payload.error}`
+              : 'Dropped one invalid review update.',
+          )
+          refreshPendingUploadCount()
+        } catch (error) {
+          const nextAttempts = nextDueJob.attempts + 1
+          replaceReviewUpload({
+            ...nextDueJob,
+            attempts: nextAttempts,
+            nextAttemptAt: Date.now() + nextRetryDelayMs(nextAttempts),
+            lastError: error instanceof Error ? error.message : 'Network request failed.',
+          })
+          setSyncErrorMessage('Network issue detected. Pending review uploads will keep retrying.')
+          refreshPendingUploadCount()
+          scheduleReviewQueueRun(nextRetryDelayMs(nextAttempts))
+          break
+        }
+      }
+    } finally {
+      isProcessingQueueRef.current = false
+      setIsSyncingReviews(false)
+      refreshPendingUploadCount()
+      if (hasQueuedFollowupRef.current) {
+        hasQueuedFollowupRef.current = false
+        void processReviewQueueRef.current()
+      }
+    }
+  }, [refreshPendingUploadCount, scheduleReviewQueueRun, username])
+
+  useEffect(() => {
+    processReviewQueueRef.current = processReviewQueue
+  }, [processReviewQueue])
+
+  useEffect(() => {
+    refreshPendingUploadCount()
+    void processReviewQueue()
+
+    const handleOnline = () => {
+      void processReviewQueue()
+    }
+
+    window.addEventListener('online', handleOnline)
+    return () => {
+      window.removeEventListener('online', handleOnline)
+      if (reviewSyncTimerRef.current != null) {
+        window.clearTimeout(reviewSyncTimerRef.current)
+      }
+    }
+  }, [processReviewQueue, refreshPendingUploadCount])
+
   const loadAllFlashcards = useCallback(async (): Promise<FlashcardData[]> => {
     const clearTimer = attachTimeout(setIsLoadingAllTimedOut, loadingAllControllerRef)
     setIsLoadingAll(true)
@@ -336,6 +527,27 @@ export function FlashcardReviewPage() {
 
     return []
   }, [])
+
+  useEffect(() => {
+    const visibleSet = new Set(visibleCardIds)
+    setSelectedCardIds((previous) => {
+      const filtered = new Set<number>()
+      previous.forEach((id) => {
+        if (visibleSet.has(id)) {
+          filtered.add(id)
+        }
+      })
+      if (filtered.size === previous.size) {
+        return previous
+      }
+      return filtered
+    })
+  }, [visibleCardIds])
+
+  useEffect(() => {
+    if (!selectAllVisibleRef.current) return
+    selectAllVisibleRef.current.indeterminate = selectedVisibleCount > 0 && !allVisibleSelected
+  }, [allVisibleSelected, selectedVisibleCount])
 
   const handleReviewView = () => {
     setViewMode('review')
@@ -436,6 +648,12 @@ export function FlashcardReviewPage() {
         throw new Error(error)
       }
 
+      setSelectedCardIds((previous) => {
+        if (!previous.has(card.id)) return previous
+        const next = new Set(previous)
+        next.delete(card.id)
+        return next
+      })
       await loadAllFlashcards()
       void loadFlashcards()
     } catch (error) {
@@ -443,6 +661,94 @@ export function FlashcardReviewPage() {
       setErrorMessage(message)
     } finally {
       setDeletingCardId(null)
+    }
+  }
+
+  const toggleCardSelection = (cardId: number) => {
+    setSelectedCardIds((previous) => {
+      const next = new Set(previous)
+      if (next.has(cardId)) {
+        next.delete(cardId)
+      } else {
+        next.add(cardId)
+      }
+      return next
+    })
+  }
+
+  const handleToggleSelectAllVisible = () => {
+    setSelectedCardIds((previous) => {
+      const next = new Set(previous)
+      if (allVisibleSelected) {
+        visibleCardIds.forEach((id) => next.delete(id))
+      } else {
+        visibleCardIds.forEach((id) => next.add(id))
+      }
+      return next
+    })
+  }
+
+  const handleBulkDeleteSelected = async () => {
+    const selectedIds = visibleCardIds.filter((id) => selectedCardIds.has(id))
+    if (!selectedIds.length) {
+      return
+    }
+
+    const shouldDelete = window.confirm(`Delete ${selectedIds.length} selected flashcards? This cannot be undone.`)
+    if (!shouldDelete) {
+      return
+    }
+
+    setIsBulkDeleting(true)
+    setErrorMessage(null)
+
+    try {
+      const response = await fetch(buildApiUrl('/api/flashcards/bulk-delete'), {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify({ ids: selectedIds }),
+      })
+
+      const payload = await parseApiJson<BulkDeleteResponse>(response)
+      if (!response.ok) {
+        const error = typeof payload.error === 'string' ? payload.error : 'Failed to bulk delete flashcards.'
+        throw new Error(error)
+      }
+
+      const deletedIds = Array.isArray(payload.deleted_ids)
+        ? payload.deleted_ids.filter((value): value is number => typeof value === 'number')
+        : []
+      const deletedSet = new Set(deletedIds)
+
+      setAllCards((previous) => previous.filter((card) => !deletedSet.has(card.id)))
+      setCards((previous) => {
+        const nextCards = previous.filter((card) => !deletedSet.has(card.id))
+        if (!nextCards.length) {
+          setIsFlipped(false)
+          setIsComplete(true)
+        }
+        return nextCards
+      })
+      setSelectedCardIds((previous) => {
+        const next = new Set(previous)
+        deletedSet.forEach((id) => next.delete(id))
+        return next
+      })
+
+      if (typeof payload.deleted === 'number' && payload.deleted < selectedIds.length) {
+        setErrorMessage(`Deleted ${payload.deleted} of ${selectedIds.length} selected flashcards.`)
+      }
+
+      void loadFlashcards()
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unexpected error while bulk deleting flashcards.'
+      setErrorMessage(message)
+    } finally {
+      setIsBulkDeleting(false)
     }
   }
 
@@ -522,48 +828,38 @@ export function FlashcardReviewPage() {
     }
   }
 
-  const handleRating = async (rating: Rating) => {
-    if (!currentCard) return
-
-    setPendingRating(rating)
-    setIsReviewTimeoutExhausted(false)
-    const clearTimer = attachTimeout(setIsReviewTimedOut, reviewControllerRef)
-    setIsSubmittingReview(true)
-    setErrorMessage(null)
-
-    try {
-      const response = await fetch(buildApiUrl(`/api/flashcards/${currentCard.id}/review`), {
-        method: 'POST',
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-        },
-        body: JSON.stringify({ rating }),
-        signal: reviewControllerRef.current?.signal,
-      })
-
-      const payload = await parseApiJson<{ error?: unknown }>(response)
-      if (!response.ok) {
-        const error = typeof payload.error === 'string' ? payload.error : 'Failed to save review.'
-        throw new Error(error)
-      }
-
-      await loadFlashcards(true)
-    } catch (error) {
-      if (isAbortError(error)) return
-      if (isBackendConnectionFailure(error)) {
-        setIsReviewTimedOut(true)
-        return
-      }
-      const message = error instanceof Error ? error.message : 'Unexpected error while saving review.'
-      setErrorMessage(message)
-    } finally {
-      clearTimer()
-      setIsSubmittingReview(false)
-      setPendingRating(null)
+  const handleRating = (rating: Rating) => {
+    if (!currentCard || !username) {
+      return
     }
+
+    if (lastQueuedCardIdRef.current === currentCard.id) {
+      return
+    }
+
+    lastQueuedCardIdRef.current = currentCard.id
+
+    enqueueReviewUpload(username, currentCard.id, rating)
+    refreshPendingUploadCount()
+    void processReviewQueue()
+
+    setErrorMessage(null)
+    setSyncErrorMessage(null)
+    setIsFlipped(false)
+    setCards((previous) => {
+      const nextCards = previous.slice(1)
+      if (!nextCards.length) {
+        setIsComplete(true)
+      }
+      return nextCards
+    })
   }
+
+  useEffect(() => {
+    if (!currentCard || lastQueuedCardIdRef.current !== currentCard.id) {
+      lastQueuedCardIdRef.current = null
+    }
+  }, [currentCard])
 
   return (
     <div className="flashcard-view relative overflow-hidden min-h-screen bg-gradient-to-br from-[#fffbf4] to-[#f0e6d8]">
@@ -647,6 +943,14 @@ export function FlashcardReviewPage() {
                   <p className="text-sm text-[#75695f]">
                     {Math.min(initialDueCount, reviewedCards + 1)} out of {initialDueCount}
                   </p>
+                  <p className="mt-2 text-xs font-medium text-[#5e5349]">
+                    {pendingUploadCount > 0
+                      ? `${pendingUploadCount} review update${pendingUploadCount === 1 ? '' : 's'} pending sync${isSyncingReviews ? '...' : '.'}`
+                      : 'All review updates synced.'}
+                  </p>
+                  {syncErrorMessage ? (
+                    <p className="mt-1 text-xs font-medium text-[#8c2f11]">{syncErrorMessage}</p>
+                  ) : null}
                 </div>
 
                 {/* Flashcard Container */}
@@ -736,47 +1040,29 @@ export function FlashcardReviewPage() {
               <div className="grid grid-cols-4 gap-3">
                 <button
                   onClick={() => void handleRating('again')}
-                  disabled={isSubmittingReview || (isReviewTimedOut && !isReviewTimeoutExhausted)}
                   className="py-3 px-4 rounded-lg bg-[#ff6b6b] text-white font-semibold text-sm transition hover:-translate-y-0.5 hover:bg-[#ff5252] shadow-lg shadow-[#ff6b6b]/20 active:translate-y-0"
                 >
-                  {isSubmittingReview && pendingRating === 'again'
-                    ? <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                    : 'Again'}
+                  Again
                 </button>
                 <button
                   onClick={() => void handleRating('hard')}
-                  disabled={isSubmittingReview || (isReviewTimedOut && !isReviewTimeoutExhausted)}
                   className="py-3 px-4 rounded-lg bg-[#ffa94d] text-white font-semibold text-sm transition hover:-translate-y-0.5 hover:bg-[#ff922b] shadow-lg shadow-[#ffa94d]/20 active:translate-y-0"
                 >
-                  {isSubmittingReview && pendingRating === 'hard'
-                    ? <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                    : 'Hard'}
+                  Hard
                 </button>
                 <button
                   onClick={() => void handleRating('good')}
-                  disabled={isSubmittingReview || (isReviewTimedOut && !isReviewTimeoutExhausted)}
                   className="py-3 px-4 rounded-lg bg-[#74b446] text-white font-semibold text-sm transition hover:-translate-y-0.5 hover:bg-[#5a9838] shadow-lg shadow-[#74b446]/20 active:translate-y-0"
                 >
-                  {isSubmittingReview && pendingRating === 'good'
-                    ? <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                    : 'Good'}
+                  Good
                 </button>
                 <button
                   onClick={() => void handleRating('easy')}
-                  disabled={isSubmittingReview || (isReviewTimedOut && !isReviewTimeoutExhausted)}
                   className="py-3 px-4 rounded-lg bg-[#15aabf] text-white font-semibold text-sm transition hover:-translate-y-0.5 hover:bg-[#1098ad] shadow-lg shadow-[#15aabf]/20 active:translate-y-0"
                 >
-                  {isSubmittingReview && pendingRating === 'easy'
-                    ? <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                    : 'Easy'}
+                  Easy
                 </button>
               </div>
-              {isReviewTimedOut ? (
-                <BusyRetryBanner
-                  active={isReviewTimedOut}
-                  onExhausted={() => setIsReviewTimeoutExhausted(true)}
-                />
-              ) : null}
               </>
             )}
 
@@ -830,6 +1116,20 @@ export function FlashcardReviewPage() {
                     <p className="text-sm text-[#75695f]">
                       {allCards.length} card{allCards.length === 1 ? '' : 's'} total
                     </p>
+                    <p className="text-sm text-[#75695f]">
+                      {selectedVisibleCount} selected
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => void handleBulkDeleteSelected()}
+                      disabled={isBulkDeleting || selectedVisibleCount === 0}
+                      className="inline-flex items-center gap-2 rounded-lg bg-[#b53333] px-4 py-2 font-semibold text-white transition hover:bg-[#9b2a2a] disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {isBulkDeleting
+                        ? <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                        : null}
+                      {isBulkDeleting ? 'Deleting…' : 'Delete Selected'}
+                    </button>
                   </div>
                   <BusyRetryBanner
                     active={isExportTimedOut}
@@ -840,6 +1140,16 @@ export function FlashcardReviewPage() {
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-[#e6d5c3] bg-[#faf5ef]">
+                        <th className="px-4 py-3 text-left font-semibold text-[#5e5349]">
+                          <input
+                            ref={selectAllVisibleRef}
+                            type="checkbox"
+                            checked={allVisibleSelected}
+                            onChange={handleToggleSelectAllVisible}
+                            aria-label="Select all visible flashcards"
+                            className="h-4 w-4 accent-[#d1451b]"
+                          />
+                        </th>
                         <th className="px-4 py-3 text-left font-semibold text-[#5e5349]">Word</th>
                         <th className="px-4 py-3 text-left font-semibold text-[#5e5349]">Pinyin</th>
                         <th className="px-4 py-3 text-left font-semibold text-[#5e5349]">Meaning</th>
@@ -863,6 +1173,15 @@ export function FlashcardReviewPage() {
                             i % 2 === 0 ? 'bg-white' : 'bg-[#fdfaf6]'
                           }`}
                         >
+                          <td className="px-4 py-3">
+                            <input
+                              type="checkbox"
+                              checked={selectedCardIds.has(card.id)}
+                              onChange={() => toggleCardSelection(card.id)}
+                              aria-label={`Select ${card.word}`}
+                              className="h-4 w-4 accent-[#d1451b]"
+                            />
+                          </td>
                           <td className="px-4 py-3 font-bold text-[#d1451b] text-base">{card.word}</td>
                           <td className="px-4 py-3 text-[#5e5349]">{card.pinyin}</td>
                           <td className="px-4 py-3 text-[#1b1714] max-w-xs">
