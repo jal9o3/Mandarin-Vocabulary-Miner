@@ -546,8 +546,8 @@ export function LibraryPage() {
 
       {/* Reading modal */}
       {readingText ? (
-        <div className="fixed inset-0 z-40 grid place-items-center bg-[#1b1714]/50 px-4 py-8">
-          <div className="relative flex w-full max-w-2xl flex-col rounded-2xl border border-[#d8ccbd] bg-white shadow-2xl" style={{ maxHeight: '90vh' }}>
+        <div className="library-modal-overlay fixed inset-0 z-40 grid place-items-center bg-[#1b1714]/50 px-4 py-8">
+          <div className="library-modal relative flex w-full max-w-2xl flex-col rounded-2xl border border-[#d8ccbd] bg-white shadow-2xl" style={{ maxHeight: '90vh' }}>
             {/* Close button */}
             <button
               type="button"
@@ -556,7 +556,7 @@ export function LibraryPage() {
                 stopSpeaking()
                 setReadingText(null)
               }}
-              className="absolute right-4 top-4 rounded-md px-2 py-1 text-sm font-bold text-[#5b4f46] transition hover:bg-[#faf6f0]"
+              className="library-modal-close absolute right-4 top-4 rounded-md px-2 py-1 text-sm font-bold text-[#5b4f46] transition hover:bg-[#faf6f0]"
             >
               ✕
             </button>
@@ -570,7 +570,7 @@ export function LibraryPage() {
                     type="button"
                     onClick={() => setShowPinyin((current) => !current)}
                     disabled={sentenceSegments.length === 0}
-                    className="rounded-md border border-[#d8ccbd] bg-white px-2 py-1 text-xs font-semibold text-[#3e342d] transition hover:bg-[#faf6f0] disabled:opacity-60"
+                    className="library-modal-action-button rounded-md border border-[#d8ccbd] bg-white px-2 py-1 text-xs font-semibold text-[#3e342d] transition hover:bg-[#faf6f0] disabled:opacity-60"
                   >
                     {showPinyin ? 'Hide Pinyin' : 'Show Pinyin'}
                   </button>
@@ -584,7 +584,7 @@ export function LibraryPage() {
                       handleSpeakReadingText()
                     }}
                     disabled={!isSpeechSupported || sentenceSegments.length === 0}
-                    className="inline-flex items-center gap-1 rounded-md border border-[#d8ccbd] bg-white px-2 py-1 text-xs font-semibold text-[#3e342d] transition hover:bg-[#faf6f0] disabled:opacity-60"
+                    className="library-modal-action-button inline-flex items-center gap-1 rounded-md border border-[#d8ccbd] bg-white px-2 py-1 text-xs font-semibold text-[#3e342d] transition hover:bg-[#faf6f0] disabled:opacity-60"
                     aria-label={isSpeaking ? 'Stop reading aloud' : 'Read aloud'}
                   >
                     <SpeakerIcon />
@@ -621,15 +621,19 @@ export function LibraryPage() {
                     ref={(node) => registerSentenceRowRef(index, node)}
                     onClick={() => startSpeakingFromSentence(index)}
                     disabled={!isSpeechSupported}
-                    className={`block w-full rounded-md px-2 py-1 text-left transition ${
+                    className={`library-modal-sentence-row block w-full rounded-md px-2 py-1 text-left transition ${
                       index === activeSentenceIndex
-                        ? 'bg-[#ffe29f] text-[#1b1714]'
+                        ? 'library-modal-sentence-row-active bg-[#ffe29f] text-[#1b1714]'
                         : 'hover:bg-[#faf6f0]'
                     } disabled:cursor-default disabled:hover:bg-transparent`}
                   >
                     <span className="block">{sentence.text}</span>
                     {showPinyin ? (
-                      <span className="mt-0.5 block text-xs font-semibold leading-relaxed text-[#6f5f53]">
+                      <span
+                        className={`library-modal-pinyin-line mt-0.5 block text-xs font-semibold leading-relaxed text-[#6f5f53] ${
+                          index === activeSentenceIndex ? 'library-modal-pinyin-line-active' : ''
+                        }`}
+                      >
                         {isPinyinLoading
                           ? PINYIN_LOADING_PLACEHOLDER
                           : sentencePinyinLines[index] || PINYIN_UNAVAILABLE_FALLBACK}
@@ -645,13 +649,13 @@ export function LibraryPage() {
 
       {/* Edit modal */}
       {editingText ? (
-        <div className="fixed inset-0 z-40 grid place-items-center bg-[#1b1714]/45 px-4">
-          <div className="relative w-full max-w-lg rounded-2xl border border-[#d8ccbd] bg-white p-6 shadow-2xl">
+        <div className="library-modal-overlay fixed inset-0 z-40 grid place-items-center bg-[#1b1714]/45 px-4">
+          <div className="library-modal library-modal-compact relative w-full max-w-lg rounded-2xl border border-[#d8ccbd] bg-white p-6 shadow-2xl">
             <button
               type="button"
               aria-label="Close"
               onClick={() => setEditingText(null)}
-              className="absolute right-4 top-4 rounded-md px-2 py-1 text-sm font-bold text-[#5b4f46] transition hover:bg-[#faf6f0]"
+              className="library-modal-close absolute right-4 top-4 rounded-md px-2 py-1 text-sm font-bold text-[#5b4f46] transition hover:bg-[#faf6f0]"
             >
               ✕
             </button>
@@ -685,7 +689,7 @@ export function LibraryPage() {
                 type="button"
                 onClick={handleSaveEdit}
                 disabled={isSavingEdit || (isEditTimedOut && !isEditTimeoutExhausted)}
-                className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#d1451b] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#b63e19] disabled:opacity-60"
+                className="library-modal-primary-button inline-flex items-center justify-center gap-2 rounded-xl bg-[#d1451b] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#b63e19] disabled:opacity-60"
               >
                 {isSavingEdit && (
                   <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
@@ -695,7 +699,7 @@ export function LibraryPage() {
               <button
                 type="button"
                 onClick={() => setEditingText(null)}
-                className="rounded-xl border border-[#1b1714] bg-white px-4 py-3 text-sm font-semibold transition hover:bg-[#faf6f0]"
+                className="library-modal-secondary-button rounded-xl border border-[#1b1714] bg-white px-4 py-3 text-sm font-semibold transition hover:bg-[#faf6f0]"
               >
                 Cancel
               </button>
@@ -710,8 +714,8 @@ export function LibraryPage() {
 
       {/* Delete confirmation */}
       {deletingText ? (
-        <div className="fixed inset-0 z-40 grid place-items-center bg-[#1b1714]/45 px-4">
-          <div className="relative w-full max-w-sm rounded-2xl border border-[#d8ccbd] bg-white p-6 shadow-2xl">
+        <div className="library-modal-overlay fixed inset-0 z-40 grid place-items-center bg-[#1b1714]/45 px-4">
+          <div className="library-modal library-modal-compact relative w-full max-w-sm rounded-2xl border border-[#d8ccbd] bg-white p-6 shadow-2xl">
             <h2 className="text-xl font-extrabold text-[#1b1714]">Delete Text?</h2>
             <p className="mt-2 text-sm leading-relaxed text-[#66594f]">
               "{deletingText.title || deletingText.content.slice(0, 60)}" will be permanently removed from your library.
@@ -721,7 +725,7 @@ export function LibraryPage() {
                 type="button"
                 onClick={handleConfirmDelete}
                 disabled={isDeleting || (isDeleteTimedOut && !isDeleteTimeoutExhausted)}
-                className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#b42020] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#941c1c] disabled:opacity-60"
+                className="library-modal-danger-button inline-flex items-center justify-center gap-2 rounded-xl bg-[#b42020] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#941c1c] disabled:opacity-60"
               >
                 {isDeleting && (
                   <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
@@ -731,7 +735,7 @@ export function LibraryPage() {
               <button
                 type="button"
                 onClick={() => setDeletingText(null)}
-                className="rounded-xl border border-[#1b1714] bg-white px-4 py-3 text-sm font-semibold transition hover:bg-[#faf6f0]"
+                className="library-modal-secondary-button rounded-xl border border-[#1b1714] bg-white px-4 py-3 text-sm font-semibold transition hover:bg-[#faf6f0]"
               >
                 Cancel
               </button>

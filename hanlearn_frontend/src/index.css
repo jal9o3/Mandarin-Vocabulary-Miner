@@ -221,3 +221,79 @@ body {
 :root[data-theme='dark'] .flashcard-view .text-\[\#a12f24\] {
   color: #ffcec3 !important;
 }
+
+:root[data-theme='dark'] .library-modal {
+  background-color: var(--han-panel) !important;
+  border-color: #4b3f35 !important;
+}
+
+:root[data-theme='dark'] .library-modal-close {
+  color: var(--han-ink) !important;
+}
+
+:root[data-theme='dark'] .library-modal-close:hover {
+  background-color: #2a221d !important;
+}
+
+:root[data-theme='dark'] .library-modal-action-button {
+  background-color: #271f1a !important;
+  border-color: #5a4d41 !important;
+  color: var(--han-ink) !important;
+}
+
+:root[data-theme='dark'] .library-modal-action-button:hover {
+  background-color: #332a24 !important;
+}
+
+:root[data-theme='dark'] .library-modal-action-button:focus-visible,
+:root[data-theme='dark'] .library-modal-primary-button:focus-visible,
+:root[data-theme='dark'] .library-modal-secondary-button:focus-visible,
+:root[data-theme='dark'] .library-modal-danger-button:focus-visible,
+:root[data-theme='dark'] .library-modal-sentence-row:focus-visible {
+  outline: 2px solid var(--han-accent) !important;
+  outline-offset: 2px;
+}
+
+:root[data-theme='dark'] .library-modal-action-button:disabled {
+  background-color: #211b17 !important;
+  border-color: #4b3f35 !important;
+}
+
+:root[data-theme='dark'] .library-modal-sentence-row {
+  color: var(--han-ink) !important;
+}
+
+:root[data-theme='dark'] .library-modal-sentence-row:hover {
+  background-color: #2a221d !important;
+}
+
+:root[data-theme='dark'] .library-modal-sentence-row-active {
+  background-color: #4a2b1d !important;
+  color: #ffe7d3 !important;
+}
+
+:root[data-theme='dark'] .library-modal-pinyin-line {
+  color: var(--han-muted) !important;
+}
+
+:root[data-theme='dark'] .library-modal-pinyin-line-active {
+  color: #ffd6b8 !important;
+}
+
+:root[data-theme='dark'] .library-modal-secondary-button {
+  background-color: #271f1a !important;
+  border-color: #5a4d41 !important;
+  color: var(--han-ink) !important;
+}
+
+:root[data-theme='dark'] .library-modal-secondary-button:hover {
+  background-color: #332a24 !important;
+}
+
+:root[data-theme='dark'] .library-modal-danger-button {
+  background-color: #8d2d2d !important;
+}
+
+:root[data-theme='dark'] .library-modal-danger-button:hover {
+  background-color: #9f3737 !important;
+}
