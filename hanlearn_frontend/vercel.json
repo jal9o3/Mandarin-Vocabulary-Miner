@@ -11,6 +11,10 @@
   ],
   "rewrites": [
     {
+      "source": "/mandarin-vocabulary-miner",
+      "destination": "/index.html"
+    },
+    {
       "source": "/mandarin-vocabulary-miner/(.*\\..*)",
       "destination": "/$1"
     },

@@ -8,6 +8,7 @@
     "backend": "python ../hanlearn_backend/manage.py runserver",
     "dev": "concurrently \"npm run frontend\" \"npm run backend\"",
     "build": "tsc -b && vite build",
+    "verify:build-artifacts": "bash ./scripts/verify-dist.sh",
     "lint": "eslint .",
     "preview": "vite preview"
   },

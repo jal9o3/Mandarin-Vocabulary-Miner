@@ -107,6 +107,11 @@ streamlit_prototype/       # Legacy Streamlit app (archived)
     npm run build
     ```
 
+4. Optional artifact verification after build (helps catch refresh 404 causes before deploy):
+    ```bash
+    npm run verify:build-artifacts
+    ```
+
 ### Running Both Services Together
 
 From the frontend directory, run a single command:
