@@ -2,10 +2,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { API_BASE_URL } from '../lib/apiBase'
 import { useAuth } from '../lib/auth'
+import { buildSentencePinyinLines, PINYIN_UNAVAILABLE_FALLBACK } from '../lib/frontendAnalysis'
 import { BusyRetryBanner, LoadingCard } from '../components/LoadingWithRetry'
 import { attachTimeout, isAbortError, isBackendConnectionFailure } from '../lib/requestUtils'
 
 const HSK_LEVELS = [1, 2, 3, 4, 5, 6, 7, 8, 9]
+const PINYIN_LOADING_PLACEHOLDER = 'loading pinyin...'
 
 type SavedText = {
   id: number
@@ -180,7 +182,12 @@ export function LibraryPage() {
   const [readingText, setReadingText] = useState<SavedText | null>(null)
   const [isSpeaking, setIsSpeaking] = useState(false)
   const [activeSentenceIndex, setActiveSentenceIndex] = useState<number | null>(null)
+  const [showPinyin, setShowPinyin] = useState(false)
+  const [sentencePinyinLines, setSentencePinyinLines] = useState<string[]>([])
+  const [isPinyinLoading, setIsPinyinLoading] = useState(false)
   const playbackSessionIdRef = useRef(0)
+  const sentenceBodyRef = useRef<HTMLDivElement | null>(null)
+  const sentenceRowRefs = useRef(new Map<number, HTMLButtonElement>())
 
   // Edit modal state
   const [editingText, setEditingText] = useState<SavedText | null>(null)
@@ -278,6 +285,14 @@ export function LibraryPage() {
     startSpeakingFromSentence(0)
   }, [startSpeakingFromSentence])
 
+  const registerSentenceRowRef = useCallback((index: number, node: HTMLButtonElement | null) => {
+    if (!node) {
+      sentenceRowRefs.current.delete(index)
+      return
+    }
+    sentenceRowRefs.current.set(index, node)
+  }, [])
+
   useEffect(() => {
     return () => {
       if (isSpeechSupported) {
@@ -288,7 +303,59 @@ export function LibraryPage() {
 
   useEffect(() => {
     stopSpeaking()
+    setShowPinyin(false)
+    setSentencePinyinLines([])
+    setIsPinyinLoading(false)
+    sentenceRowRefs.current.clear()
   }, [readingText?.id, stopSpeaking])
+
+  useEffect(() => {
+    if (activeSentenceIndex == null) {
+      return
+    }
+
+    const row = sentenceRowRefs.current.get(activeSentenceIndex)
+    if (!row) {
+      return
+    }
+
+    row.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+  }, [activeSentenceIndex])
+
+  useEffect(() => {
+    if (!showPinyin || sentenceSegments.length === 0) {
+      setSentencePinyinLines([])
+      setIsPinyinLoading(false)
+      return
+    }
+
+    let isCancelled = false
+    setIsPinyinLoading(true)
+
+    void buildSentencePinyinLines(sentenceSegments.map((segment) => segment.text))
+      .then((lines) => {
+        if (isCancelled) {
+          return
+        }
+        setSentencePinyinLines(lines)
+      })
+      .catch(() => {
+        if (isCancelled) {
+          return
+        }
+        setSentencePinyinLines(sentenceSegments.map(() => PINYIN_UNAVAILABLE_FALLBACK))
+      })
+      .finally(() => {
+        if (isCancelled) {
+          return
+        }
+        setIsPinyinLoading(false)
+      })
+
+    return () => {
+      isCancelled = true
+    }
+  }, [showPinyin, sentenceSegments])
 
   const loadLibrary = useCallback(async () => {
     if (!isAuthenticated) {
@@ -501,6 +568,14 @@ export function LibraryPage() {
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
+                    onClick={() => setShowPinyin((current) => !current)}
+                    disabled={sentenceSegments.length === 0}
+                    className="rounded-md border border-[#d8ccbd] bg-white px-2 py-1 text-xs font-semibold text-[#3e342d] transition hover:bg-[#faf6f0] disabled:opacity-60"
+                  >
+                    {showPinyin ? 'Hide Pinyin' : 'Show Pinyin'}
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => {
                       if (isSpeaking) {
                         stopSpeaking()
@@ -524,6 +599,11 @@ export function LibraryPage() {
               <p className="mt-2 text-xs font-semibold text-[#8f7f6f]">
                 Click any sentence to read from there.
               </p>
+              {showPinyin && isPinyinLoading ? (
+                <p className="mt-2 text-xs font-semibold text-[#8f7f6f]">
+                  Loading pinyin…
+                </p>
+              ) : null}
               {!isSpeechSupported ? (
                 <p className="mt-2 text-xs font-semibold text-[#8f7f6f]">
                   Speech playback is not available in this browser.
@@ -532,12 +612,13 @@ export function LibraryPage() {
             </div>
 
             {/* Scrollable body */}
-            <div className="overflow-y-auto px-6 py-5">
+            <div ref={sentenceBodyRef} className="overflow-y-auto px-6 py-5">
               <div className="space-y-2 text-base leading-loose text-[#2f261f]">
                 {sentenceSegments.map((sentence, index) => (
                   <button
                     key={`${index}-${sentence.text.slice(0, 24)}`}
                     type="button"
+                    ref={(node) => registerSentenceRowRef(index, node)}
                     onClick={() => startSpeakingFromSentence(index)}
                     disabled={!isSpeechSupported}
                     className={`block w-full rounded-md px-2 py-1 text-left transition ${
@@ -546,7 +627,14 @@ export function LibraryPage() {
                         : 'hover:bg-[#faf6f0]'
                     } disabled:cursor-default disabled:hover:bg-transparent`}
                   >
-                    {sentence.text}
+                    <span className="block">{sentence.text}</span>
+                    {showPinyin ? (
+                      <span className="mt-0.5 block text-xs font-semibold leading-relaxed text-[#6f5f53]">
+                        {isPinyinLoading
+                          ? PINYIN_LOADING_PLACEHOLDER
+                          : sentencePinyinLines[index] || PINYIN_UNAVAILABLE_FALLBACK}
+                      </span>
+                    ) : null}
                   </button>
                 ))}
               </div>

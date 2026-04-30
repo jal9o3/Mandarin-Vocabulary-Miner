@@ -59,6 +59,7 @@ const HAN_MATCH_REGEX = /\p{Script=Han}+/gu
 const HAN_TOKEN_REGEX = /\p{Script=Han}/u
 const NO_MEANING_FALLBACK = 'No meaning found in current wordlists.'
 const NO_PRONUNCIATION_FALLBACK = '(pronunciation unavailable)'
+export const PINYIN_UNAVAILABLE_FALLBACK = '(pinyin unavailable)'
 
 type WordlistBundle = {
   hskLookup: Map<string, number>
@@ -81,6 +82,19 @@ let cedictPromise: Promise<CedictClient | null> | null = null
 const cedictWordCache = new Map<string, PriorityInfo | null>()
 const DEFAULT_CEDICT_CDN_ENTRY = 'https://cdn.jsdelivr.net/npm/cc-cedict@1.1.1/dist/index.js'
 const CEDICT_CDN_ENTRY = import.meta.env.VITE_CEDICT_CDN_ENTRY || DEFAULT_CEDICT_CDN_ENTRY
+
+function debugLog(message: string, details?: unknown): void {
+  if (!import.meta.env.DEV) {
+    return
+  }
+
+  if (details === undefined) {
+    console.debug(`[frontendAnalysis] ${message}`)
+    return
+  }
+
+  console.debug(`[frontendAnalysis] ${message}`, details)
+}
 
 function removePunctuation(text: string): string {
   if (!text) {
@@ -280,18 +294,46 @@ function staticPath(relativePath: string): string {
   return `${normalizedBase}${relativePath}`
 }
 
+function fallbackStaticPath(relativePath: string): string {
+  if (relativePath.startsWith('/')) {
+    return relativePath
+  }
+  return `/${relativePath}`
+}
+
 async function loadLevelPayload(level: number): Promise<WordlistEntry[]> {
-  const response = await fetch(staticPath(`wordlists/inclusive/new/${level}.min.json`))
-  if (!response.ok) {
-    return []
+  const relativePath = `wordlists/inclusive/new/${level}.min.json`
+  const candidateUrls = [staticPath(relativePath)]
+  const fallbackPath = fallbackStaticPath(relativePath)
+
+  if (fallbackPath !== candidateUrls[0]) {
+    candidateUrls.push(fallbackPath)
   }
 
-  const payload = (await response.json()) as unknown
-  if (!Array.isArray(payload)) {
-    return []
+  for (const url of candidateUrls) {
+    try {
+      debugLog(`Loading wordlist level ${level} from ${url}`)
+      const response = await fetch(url)
+      if (!response.ok) {
+        debugLog(`Wordlist level ${level} request failed`, { url, status: response.status })
+        continue
+      }
+
+      const payload = (await response.json()) as unknown
+      if (!Array.isArray(payload)) {
+        debugLog(`Wordlist level ${level} payload was not an array`, { url })
+        continue
+      }
+
+      const entries = payload.filter((entry): entry is WordlistEntry => !!entry && typeof entry === 'object')
+      debugLog(`Wordlist level ${level} loaded`, { url, entries: entries.length })
+      return entries
+    } catch (error) {
+      debugLog(`Wordlist level ${level} load threw`, { url, error })
+    }
   }
 
-  return payload.filter((entry): entry is WordlistEntry => !!entry && typeof entry === 'object')
+  return []
 }
 
 async function loadWordlistBundle(): Promise<WordlistBundle> {
@@ -318,6 +360,12 @@ async function loadWordlistBundle(): Promise<WordlistBundle> {
     }
   }
 
+  debugLog('Wordlist bundle loaded', {
+    baseUrl: import.meta.env.BASE_URL || '/',
+    hskLookupSize: lookup.size,
+    wordInfoLookupSize: wordInfoLookup.size,
+  })
+
   return {
     hskLookup: lookup,
     wordInfoLookup,
@@ -328,16 +376,30 @@ async function getHskLookup(): Promise<Map<string, number>> {
   if (!wordlistBundlePromise) {
     wordlistBundlePromise = loadWordlistBundle()
   }
-  const bundle = await wordlistBundlePromise
-  return bundle.hskLookup
+
+  try {
+    const bundle = await wordlistBundlePromise
+    return bundle.hskLookup
+  } catch (error) {
+    debugLog('getHskLookup failed; resetting bundle promise', { error })
+    wordlistBundlePromise = null
+    return new Map<string, number>()
+  }
 }
 
 async function getWordInfoLookup(): Promise<Map<string, PriorityInfo>> {
   if (!wordlistBundlePromise) {
     wordlistBundlePromise = loadWordlistBundle()
   }
-  const bundle = await wordlistBundlePromise
-  return bundle.wordInfoLookup
+
+  try {
+    const bundle = await wordlistBundlePromise
+    return bundle.wordInfoLookup
+  } catch (error) {
+    debugLog('getWordInfoLookup failed; resetting bundle promise', { error })
+    wordlistBundlePromise = null
+    return new Map<string, PriorityInfo>()
+  }
 }
 
 function estimateHskLevel(word: string, lookup: Map<string, number>): number {
@@ -612,4 +674,86 @@ export async function analyzeTextFrontend(text: string, selectedWords: string[],
     saved_flashcard_words: [...savedSet].sort(),
     priority_drill_set,
   }
+}
+
+export async function buildSentencePinyinLines(sentences: string[]): Promise<string[]> {
+  const wordInfoLookup = await getWordInfoLookup()
+  if (wordInfoLookup.size === 0) {
+    debugLog('buildSentencePinyinLines running with empty wordInfoLookup')
+  }
+
+  const normalizePronunciation = (value: string | null | undefined): string | null => {
+    if (!value) {
+      return null
+    }
+    const trimmed = value.trim()
+    if (!trimmed || trimmed === NO_PRONUNCIATION_FALLBACK) {
+      return null
+    }
+    return trimmed
+  }
+
+  const resolveTokenPinyin = async (token: string): Promise<string> => {
+    const localExact = normalizePronunciation(wordInfoLookup.get(token)?.pronunciation)
+    if (localExact) {
+      return localExact
+    }
+
+    try {
+      const localFallback = resolvePriorityInfo(token, wordInfoLookup)
+      const localFallbackPronunciation = normalizePronunciation(localFallback.pronunciation)
+      if (localFallbackPronunciation) {
+        return localFallbackPronunciation
+      }
+    } catch {
+      // Keep token-level failures isolated so other tokens/sentences still resolve.
+    }
+
+    try {
+      const cedictFallback = await resolvePriorityInfoWithCedict(token, wordInfoLookup)
+      const cedictPronunciation = normalizePronunciation(cedictFallback.pronunciation)
+      if (cedictPronunciation) {
+        return cedictPronunciation
+      }
+    } catch {
+      // Cedict fallback is optional; unresolved tokens still produce a stable placeholder.
+    }
+
+    return PINYIN_UNAVAILABLE_FALLBACK
+  }
+
+  return Promise.all(sentences.map(async (sentence) => {
+    const tokens = tokenize(sentence)
+    if (!tokens.length) {
+      return ''
+    }
+
+    const tokenCache = new Map<string, string>()
+    const parts = await Promise.all(tokens.map(async (token) => {
+      const normalizedToken = token.trim()
+      if (!normalizedToken) {
+        return PINYIN_UNAVAILABLE_FALLBACK
+      }
+
+      const cached = tokenCache.get(normalizedToken)
+      if (cached) {
+        return cached
+      }
+
+      const resolved = await resolveTokenPinyin(normalizedToken)
+      tokenCache.set(normalizedToken, resolved)
+      return resolved
+    }))
+
+    const unresolvedCount = parts.filter((part) => part === PINYIN_UNAVAILABLE_FALLBACK).length
+    if (unresolvedCount > 0) {
+      debugLog('Sentence pinyin unresolved tokens', {
+        sentencePreview: sentence.slice(0, 50),
+        tokens: tokens.length,
+        unresolvedCount,
+      })
+    }
+
+    return parts.join(' ')
+  }))
 }
