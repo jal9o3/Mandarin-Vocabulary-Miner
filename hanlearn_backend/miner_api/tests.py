@@ -624,6 +624,275 @@ class MinerApiTests(TestCase):
         flashcard.refresh_from_db()
         self.assertEqual(flashcard.review_count, 1)
 
+    def test_review_flashcard_rejects_missing_or_invalid_rating(self):
+        user = User.objects.create_user(username="ratingcheck", password="TopSecret123")
+        self.client.force_login(user)
+
+        flashcard = UserFlashcard.objects.create(
+            user=user,
+            word=Word.objects.create(text="苹果", pinyin="ping2 guo3"),
+            meaning="apple",
+            due_at=timezone.now() - timedelta(minutes=1),
+        )
+
+        missing_rating = self.client.post(
+            f"/api/flashcards/{flashcard.id}/review",
+            data=json.dumps({}),
+            content_type="application/json",
+        )
+        numeric_rating = self.client.post(
+            f"/api/flashcards/{flashcard.id}/review",
+            data=json.dumps({"rating": 3}),
+            content_type="application/json",
+        )
+        unknown_rating = self.client.post(
+            f"/api/flashcards/{flashcard.id}/review",
+            data=json.dumps({"rating": "perfect"}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(missing_rating.status_code, 400)
+        self.assertEqual(numeric_rating.status_code, 400)
+        self.assertEqual(unknown_rating.status_code, 400)
+
+    def test_review_flashcard_requires_authentication_and_ownership(self):
+        owner = User.objects.create_user(username="owner", password="TopSecret123")
+        intruder = User.objects.create_user(username="intruder", password="TopSecret123")
+        flashcard = UserFlashcard.objects.create(
+            user=owner,
+            word=Word.objects.create(text="老师", pinyin="lao3 shi1"),
+            meaning="teacher",
+            due_at=timezone.now() - timedelta(minutes=1),
+        )
+
+        unauthenticated = self.client.post(
+            f"/api/flashcards/{flashcard.id}/review",
+            data=json.dumps({"rating": "good"}),
+            content_type="application/json",
+        )
+        self.assertEqual(unauthenticated.status_code, 401)
+
+        self.client.force_login(intruder)
+        wrong_owner = self.client.post(
+            f"/api/flashcards/{flashcard.id}/review",
+            data=json.dumps({"rating": "good"}),
+            content_type="application/json",
+        )
+        missing_card = self.client.post(
+            "/api/flashcards/999999/review",
+            data=json.dumps({"rating": "good"}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(wrong_owner.status_code, 404)
+        self.assertEqual(missing_card.status_code, 404)
+
+    def test_review_flashcard_validates_idempotency_key_shape(self):
+        user = User.objects.create_user(username="keyshape", password="TopSecret123")
+        self.client.force_login(user)
+
+        flashcard = UserFlashcard.objects.create(
+            user=user,
+            word=Word.objects.create(text="医生", pinyin="yi1 sheng1"),
+            meaning="doctor",
+            due_at=timezone.now() - timedelta(minutes=1),
+        )
+
+        non_string = self.client.post(
+            f"/api/flashcards/{flashcard.id}/review",
+            data=json.dumps({"rating": "good", "idempotency_key": 123}),
+            content_type="application/json",
+        )
+        empty_string = self.client.post(
+            f"/api/flashcards/{flashcard.id}/review",
+            data=json.dumps({"rating": "good", "idempotency_key": "   "}),
+            content_type="application/json",
+        )
+        too_long = self.client.post(
+            f"/api/flashcards/{flashcard.id}/review",
+            data=json.dumps({"rating": "good", "idempotency_key": "k" * 129}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(non_string.status_code, 400)
+        self.assertEqual(empty_string.status_code, 400)
+        self.assertEqual(too_long.status_code, 400)
+
+    def test_review_flashcard_idempotency_key_rejects_flashcard_mismatch(self):
+        user = User.objects.create_user(username="idmismatch", password="TopSecret123")
+        self.client.force_login(user)
+
+        first = UserFlashcard.objects.create(
+            user=user,
+            word=Word.objects.create(text="今天", pinyin="jin1 tian1"),
+            meaning="today",
+            due_at=timezone.now() - timedelta(minutes=1),
+        )
+        second = UserFlashcard.objects.create(
+            user=user,
+            word=Word.objects.create(text="明天", pinyin="ming2 tian1"),
+            meaning="tomorrow",
+            due_at=timezone.now() - timedelta(minutes=1),
+        )
+
+        first_response = self.client.post(
+            f"/api/flashcards/{first.id}/review",
+            data=json.dumps({"rating": "good", "idempotency_key": "k-shared"}),
+            content_type="application/json",
+        )
+        second_response = self.client.post(
+            f"/api/flashcards/{second.id}/review",
+            data=json.dumps({"rating": "good", "idempotency_key": "k-shared"}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(first_response.status_code, 200)
+        self.assertEqual(second_response.status_code, 409)
+
+    def test_review_flashcard_hard_and_easy_branch_updates(self):
+        user = User.objects.create_user(username="branches", password="TopSecret123")
+        self.client.force_login(user)
+
+        hard_card = UserFlashcard.objects.create(
+            user=user,
+            word=Word.objects.create(text="写", pinyin="xie3"),
+            meaning="write",
+            due_at=timezone.now() - timedelta(minutes=1),
+            interval_days=1,
+            ease_factor=2.5,
+            consecutive_correct_reviews=1,
+        )
+        easy_card = UserFlashcard.objects.create(
+            user=user,
+            word=Word.objects.create(text="读", pinyin="du2"),
+            meaning="read",
+            due_at=timezone.now() - timedelta(minutes=1),
+            interval_days=0,
+            ease_factor=2.5,
+            consecutive_correct_reviews=0,
+        )
+
+        hard_response = self.client.post(
+            f"/api/flashcards/{hard_card.id}/review",
+            data=json.dumps({"rating": "hard"}),
+            content_type="application/json",
+        )
+        easy_response = self.client.post(
+            f"/api/flashcards/{easy_card.id}/review",
+            data=json.dumps({"rating": "easy"}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(hard_response.status_code, 200)
+        self.assertEqual(easy_response.status_code, 200)
+
+        hard_card.refresh_from_db()
+        easy_card.refresh_from_db()
+        self.assertEqual(hard_card.interval_days, 2)
+        self.assertAlmostEqual(hard_card.ease_factor, 2.35)
+        self.assertEqual(easy_card.interval_days, 3)
+        self.assertAlmostEqual(easy_card.ease_factor, 2.65)
+
+    def test_review_flashcard_mature_interval_uses_half_up_rounding(self):
+        user = User.objects.create_user(username="rounding", password="TopSecret123")
+        self.client.force_login(user)
+
+        flashcard = UserFlashcard.objects.create(
+            user=user,
+            word=Word.objects.create(text="时间", pinyin="shi2 jian1"),
+            meaning="time",
+            due_at=timezone.now() - timedelta(minutes=1),
+            interval_days=3,
+            ease_factor=1.5,
+            consecutive_correct_reviews=2,
+        )
+
+        response = self.client.post(
+            f"/api/flashcards/{flashcard.id}/review",
+            data=json.dumps({"rating": "good"}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        flashcard.refresh_from_db()
+        self.assertEqual(flashcard.interval_days, 5)
+        self.assertEqual(flashcard.consecutive_correct_reviews, 3)
+
+    def test_review_flashcard_clamps_ease_factor_bounds(self):
+        user = User.objects.create_user(username="clamps", password="TopSecret123")
+        self.client.force_login(user)
+
+        low_ease_card = UserFlashcard.objects.create(
+            user=user,
+            word=Word.objects.create(text="下雨", pinyin="xia4 yu3"),
+            meaning="rain",
+            due_at=timezone.now() - timedelta(minutes=1),
+            interval_days=6,
+            ease_factor=1.31,
+            consecutive_correct_reviews=3,
+        )
+        high_ease_card = UserFlashcard.objects.create(
+            user=user,
+            word=Word.objects.create(text="晴天", pinyin="qing2 tian1"),
+            meaning="sunny day",
+            due_at=timezone.now() - timedelta(minutes=1),
+            interval_days=6,
+            ease_factor=2.95,
+            consecutive_correct_reviews=3,
+        )
+
+        low_response = self.client.post(
+            f"/api/flashcards/{low_ease_card.id}/review",
+            data=json.dumps({"rating": "again"}),
+            content_type="application/json",
+        )
+        high_response = self.client.post(
+            f"/api/flashcards/{high_ease_card.id}/review",
+            data=json.dumps({"rating": "easy"}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(low_response.status_code, 200)
+        self.assertEqual(high_response.status_code, 200)
+
+        low_ease_card.refresh_from_db()
+        high_ease_card.refresh_from_db()
+        self.assertAlmostEqual(low_ease_card.ease_factor, 1.3)
+        self.assertAlmostEqual(high_ease_card.ease_factor, 3.0)
+
+    def test_review_flashcard_due_remaining_reflects_post_review_state(self):
+        user = User.objects.create_user(username="dueremaining", password="TopSecret123")
+        self.client.force_login(user)
+
+        target = UserFlashcard.objects.create(
+            user=user,
+            word=Word.objects.create(text="学校", pinyin="xue2 xiao4"),
+            meaning="school",
+            due_at=timezone.now() - timedelta(minutes=2),
+        )
+        UserFlashcard.objects.create(
+            user=user,
+            word=Word.objects.create(text="学生", pinyin="xue2 sheng1"),
+            meaning="student",
+            due_at=timezone.now() - timedelta(minutes=1),
+        )
+        UserFlashcard.objects.create(
+            user=user,
+            word=Word.objects.create(text="老师们", pinyin="lao3 shi1 men"),
+            meaning="teachers",
+            due_at=timezone.now() + timedelta(days=1),
+        )
+
+        response = self.client.post(
+            f"/api/flashcards/{target.id}/review",
+            data=json.dumps({"rating": "good"}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["due_remaining"], 1)
+
     def test_bulk_delete_flashcards_deletes_only_owned_ids(self):
         user = User.objects.create_user(username="bulkdeleter", password="TopSecret123")
         other_user = User.objects.create_user(username="bulkother", password="TopSecret123")

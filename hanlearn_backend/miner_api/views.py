@@ -1,5 +1,6 @@
 import json
 import csv
+import math
 from datetime import timedelta
 
 from django.contrib.auth import authenticate, login, logout, update_session_auth_hash
@@ -17,8 +18,19 @@ from .services import analyze_text, build_vocab_screen, compute_text_hsk_level, 
 
 VOCAB_FILE = settings.BASE_DIR / "vocab.txt"
 MINIMUM_EASE_FACTOR = 1.3
+MAXIMUM_EASE_FACTOR = 3.0
+MAX_INTERVAL_DAYS = 36500
 MAX_ANALYZE_TEXT_CHARS = 60_000
 MAX_ANALYZE_UPLOAD_BYTES = 5 * 1024 * 1024
+
+
+def _clamp_ease_factor(value: float) -> float:
+    return min(MAXIMUM_EASE_FACTOR, max(MINIMUM_EASE_FACTOR, value))
+
+
+def _round_half_up(value: float) -> int:
+    # Use explicit half-up rounding so interval growth stays predictable.
+    return math.floor(value + 0.5)
 
 
 def _split_meanings(meaning_text: str) -> list[str]:
@@ -66,12 +78,12 @@ def _serialize_flashcard(flashcard: UserFlashcard) -> dict:
 
 def _apply_sm2_review(flashcard: UserFlashcard, rating: str) -> None:
     now = timezone.now()
-    current_interval = flashcard.interval_days
-    current_streak = flashcard.consecutive_correct_reviews
-    current_ease = max(MINIMUM_EASE_FACTOR, flashcard.ease_factor)
+    current_interval = max(0, int(flashcard.interval_days or 0))
+    current_streak = max(0, int(flashcard.consecutive_correct_reviews or 0))
+    current_ease = _clamp_ease_factor(float(flashcard.ease_factor or MINIMUM_EASE_FACTOR))
 
     if rating == "again":
-        flashcard.ease_factor = max(MINIMUM_EASE_FACTOR, current_ease - 0.2)
+        flashcard.ease_factor = _clamp_ease_factor(current_ease - 0.2)
         flashcard.interval_days = 0
         flashcard.consecutive_correct_reviews = 0
         flashcard.lapse_count += 1
@@ -82,9 +94,9 @@ def _apply_sm2_review(flashcard: UserFlashcard, rating: str) -> None:
         ease_factor = current_ease
 
         if rating == "hard":
-            ease_factor = max(MINIMUM_EASE_FACTOR, current_ease - 0.15)
+            ease_factor = _clamp_ease_factor(current_ease - 0.15)
         elif rating == "easy":
-            ease_factor = current_ease + 0.15
+            ease_factor = _clamp_ease_factor(current_ease + 0.15)
 
         if next_streak == 1:
             interval_days = 1 if rating != "easy" else 3
@@ -96,13 +108,16 @@ def _apply_sm2_review(flashcard: UserFlashcard, rating: str) -> None:
             else:
                 interval_days = 3
         else:
+            base_interval = max(1, current_interval)
             multiplier = ease_factor
             if rating == "hard":
                 multiplier *= 0.8
             elif rating == "easy":
                 multiplier *= 1.3
 
-            interval_days = max(current_interval + 1, round(current_interval * multiplier))
+            interval_days = max(base_interval + 1, _round_half_up(base_interval * multiplier))
+
+        interval_days = min(MAX_INTERVAL_DAYS, interval_days)
 
         flashcard.ease_factor = ease_factor
         flashcard.interval_days = interval_days
